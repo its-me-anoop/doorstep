@@ -59,3 +59,17 @@ export interface AuthGateway {
   /** Sets the role/agencyId custom claims baked into future tokens. */
   setRoleClaims(uid: string, claims: RoleClaims): Promise<void>
 }
+
+/**
+ * The credential itself failed verification — malformed, expired,
+ * revoked, or signed for another project. Adapters throw this (and only
+ * this) for credential-shaped failures so route handlers can map it to
+ * 401 without also swallowing infrastructure errors (an unreachable
+ * database or misconfigured service account is a 500, not a 401).
+ */
+export class InvalidTokenError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options)
+    this.name = 'InvalidTokenError'
+  }
+}

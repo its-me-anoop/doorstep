@@ -13,8 +13,10 @@ import { z } from 'zod'
 import { apiError } from '@/lib/api-error'
 import { createServices } from '@/lib/composition'
 import { SESSION_COOKIE_NAME } from '@/lib/session-cookie-name'
+import { InvalidTokenError } from '@/ports/auth-gateway'
 import {
   AccountSuspendedError,
+  MissingEmailClaimError,
   SESSION_COOKIE_LIFETIME_MS,
 } from '@/services/auth'
 
@@ -66,11 +68,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (error instanceof AccountSuspendedError) {
       return apiError(403, 'account_suspended', error.message)
     }
-    return apiError(
-      401,
-      'invalid_credential',
-      'Could not verify the supplied ID token',
-    )
+    if (
+      error instanceof InvalidTokenError ||
+      error instanceof MissingEmailClaimError
+    ) {
+      return apiError(
+        401,
+        'invalid_credential',
+        'Could not verify the supplied ID token',
+      )
+    }
+    // Anything else is infrastructure (unreachable database, misconfigured
+    // service account) — masking it as a credential failure sends callers
+    // debugging the wrong thing.
+    console.error('POST /api/v1/auth/session failed:', error)
+    return apiError(500, 'internal_error', 'Something went wrong on our side')
   }
 }
 

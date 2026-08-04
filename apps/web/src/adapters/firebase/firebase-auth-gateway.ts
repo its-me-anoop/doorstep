@@ -8,13 +8,33 @@
 import type { Auth, DecodedIdToken } from 'firebase-admin/auth'
 
 import { isUserRole } from '@/domain/enums'
-import type {
-  AuthGateway,
-  DecodedIdentity,
-  RoleClaims,
+import {
+  InvalidTokenError,
+  type AuthGateway,
+  type DecodedIdentity,
+  type RoleClaims,
 } from '@/ports/auth-gateway'
 
 import { getAdminApp } from './admin-app'
+
+/**
+ * firebase-admin reports credential-shaped failures with `auth/*` error
+ * codes (expired, malformed, revoked, wrong audience…). Those — and only
+ * those — become the port's InvalidTokenError; anything else (network,
+ * misconfigured service account) propagates raw so callers can treat it
+ * as the infrastructure failure it is.
+ */
+function rethrowCredentialFailure(error: unknown): never {
+  const code =
+    (error as { errorInfo?: { code?: string }; code?: string })?.errorInfo
+      ?.code ?? (error as { code?: string })?.code
+  if (typeof code === 'string' && code.startsWith('auth/')) {
+    throw new InvalidTokenError(`Firebase rejected the credential (${code})`, {
+      cause: error,
+    })
+  }
+  throw error
+}
 
 /** Pure mapper: firebase-admin's decoded token/cookie -> the port's
  * DecodedIdentity. Unit-tested directly (no Admin SDK call needed) —
@@ -44,22 +64,38 @@ async function adminAuth(): Promise<Auth> {
 
 export class FirebaseAuthGateway implements AuthGateway {
   async verifyIdToken(idToken: string): Promise<DecodedIdentity> {
-    const decoded = await (await adminAuth()).verifyIdToken(idToken)
-    return toDecodedIdentity(decoded)
+    try {
+      const decoded = await (await adminAuth()).verifyIdToken(idToken)
+      return toDecodedIdentity(decoded)
+    } catch (error) {
+      rethrowCredentialFailure(error)
+    }
   }
 
   async createSessionCookie(
     idToken: string,
     expiresInMs: number,
   ): Promise<string> {
-    return (await adminAuth()).createSessionCookie(idToken, {
-      expiresIn: expiresInMs,
-    })
+    try {
+      return await (
+        await adminAuth()
+      ).createSessionCookie(idToken, {
+        expiresIn: expiresInMs,
+      })
+    } catch (error) {
+      rethrowCredentialFailure(error)
+    }
   }
 
   async verifySessionCookie(cookie: string): Promise<DecodedIdentity> {
-    const decoded = await (await adminAuth()).verifySessionCookie(cookie, true)
-    return toDecodedIdentity(decoded)
+    try {
+      const decoded = await (
+        await adminAuth()
+      ).verifySessionCookie(cookie, true)
+      return toDecodedIdentity(decoded)
+    } catch (error) {
+      rethrowCredentialFailure(error)
+    }
   }
 
   async revokeSessions(uid: string): Promise<void> {

@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { AccountSuspendedError } from '@/services/auth'
+import { AccountSuspendedError, MissingEmailClaimError } from '@/services/auth'
 
+import { InvalidTokenError } from '@/ports/auth-gateway'
 import { SESSION_COOKIE_NAME } from '@/lib/session-cookie-name'
 
 const establishSession = { execute: vi.fn() }
@@ -113,8 +114,10 @@ describe('POST /api/v1/auth/session', () => {
     expect(body.error.code).toBe('account_suspended')
   })
 
-  it('maps any other service error to 401 invalid_credential', async () => {
-    establishSession.execute.mockRejectedValue(new Error('bad token'))
+  it('maps InvalidTokenError to 401 invalid_credential', async () => {
+    establishSession.execute.mockRejectedValue(
+      new InvalidTokenError('token verification failed'),
+    )
     const { POST } = await import('@/app/api/v1/auth/session/route')
 
     const response = await POST(postRequest({ idToken: 'garbage' }))
@@ -122,6 +125,35 @@ describe('POST /api/v1/auth/session', () => {
     expect(response.status).toBe(401)
     const body = await response.json()
     expect(body.error.code).toBe('invalid_credential')
+  })
+
+  it('maps MissingEmailClaimError to 401 invalid_credential', async () => {
+    establishSession.execute.mockRejectedValue(new MissingEmailClaimError())
+    const { POST } = await import('@/app/api/v1/auth/session/route')
+
+    const response = await POST(postRequest({ idToken: 'no-email-token' }))
+
+    expect(response.status).toBe(401)
+    const body = await response.json()
+    expect(body.error.code).toBe('invalid_credential')
+  })
+
+  it('maps unknown errors (e.g. an unreachable database) to 500 internal_error, not 401', async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined)
+    establishSession.execute.mockRejectedValue(
+      new Error('connect ECONNREFUSED 127.0.0.1:5432'),
+    )
+    const { POST } = await import('@/app/api/v1/auth/session/route')
+
+    const response = await POST(postRequest({ idToken: 'valid-id-token' }))
+
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(body.error.code).toBe('internal_error')
+    expect(consoleError).toHaveBeenCalled()
+    consoleError.mockRestore()
   })
 })
 
