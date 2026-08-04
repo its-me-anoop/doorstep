@@ -4,8 +4,9 @@
  * adapters/firebase, not this port.
  */
 
-export type UserRole = 'user' | 'owner' | 'agent' | 'admin'
-export type UserStatus = 'active' | 'suspended' | 'banned'
+import type { UserRole, UserStatus } from '@/domain/enums'
+
+export type { UserRole, UserStatus }
 
 export interface User {
   id: string

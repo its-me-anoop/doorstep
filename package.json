@@ -13,6 +13,8 @@
     "test": "pnpm --filter web test",
     "test:unit": "pnpm --filter web test:unit",
     "test:integration": "pnpm --filter web test:integration",
+    "db:generate": "pnpm --filter web db:generate",
+    "db:migrate": "pnpm --filter web db:migrate",
     "seed": "echo 'seed: implemented in a later step'"
   }
 }
