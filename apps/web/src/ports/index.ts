@@ -24,6 +24,7 @@ export type {
   UserStatus,
   UserRepository,
 } from './user-repository'
+export { UniqueViolationError } from './user-repository'
 export type {
   GeoPoint,
   SearchDocument,

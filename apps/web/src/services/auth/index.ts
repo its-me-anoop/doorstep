@@ -20,4 +20,8 @@ export { TerminateSession } from './terminate-session'
 export { GetCurrentUser } from './get-current-user'
 export type { GetCurrentUserResult } from './get-current-user'
 
-export { AccountSuspendedError, UnknownSessionUserError } from './errors'
+export {
+  AccountSuspendedError,
+  MissingEmailClaimError,
+  UnknownSessionUserError,
+} from './errors'

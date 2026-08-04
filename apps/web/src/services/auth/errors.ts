@@ -36,3 +36,21 @@ export class UnknownSessionUserError extends Error {
     this.name = 'UnknownSessionUserError'
   }
 }
+
+/**
+ * A verified Firebase credential carried no email claim. `users.email` is
+ * unique and NOT NULL (PRD §9.2), so on first sign-in ensureUser cannot
+ * insert one without either violating that constraint (a second
+ * email-less identity) or silently mis-recording the account — instead
+ * it rejects the sign-in here. All three M0 providers (email+password,
+ * Google, Apple including private relay) always supply an email, so this
+ * only fires for a credential this app should not have trusted anyway;
+ * the API route's catch-all (not AccountSuspendedError) already maps any
+ * such rejection to 401 invalid_credential, so no route change is needed.
+ */
+export class MissingEmailClaimError extends Error {
+  constructor() {
+    super('Credential has no email claim')
+    this.name = 'MissingEmailClaimError'
+  }
+}

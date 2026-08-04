@@ -1,6 +1,11 @@
+import postgres from 'postgres'
 import { describe, expect, it } from 'vitest'
 
-import { mapRowToUser } from '@/adapters/drizzle/repositories/user-repository'
+import {
+  mapRowToUser,
+  mapUniqueViolation,
+} from '@/adapters/drizzle/repositories/user-repository'
+import { UniqueViolationError } from '@/ports/user-repository'
 
 // mapRowToUser is a pure function (row -> domain User), so it is
 // unit-testable without a database connection. The DrizzleUserRepository
@@ -50,5 +55,53 @@ describe('mapRowToUser', () => {
     }
 
     expect(mapRowToUser(row).agencyId).toBeNull()
+  })
+})
+
+// mapUniqueViolation is the same kind of pure, DB-free translation as
+// mapRowToUser — the failure mode it exists for (two concurrent
+// first-sign-ins hitting users_firebase_uid_idx) is exercised
+// end-to-end against a real Postgres instance in
+// tests/integration/db.schema.test.ts (gated on TEST_DATABASE_URL).
+describe('mapUniqueViolation', () => {
+  // postgres's own .d.ts declares PostgresError's constructor as
+  // `(message?, options?)`, but the runtime constructor actually takes a
+  // field bag and Object.assigns it onto the instance — build one the
+  // same way the driver does, then assign the field bag as the type
+  // declares it (via property assignment, so tsc is happy either way).
+  function uniqueViolation(constraintName: string): postgres.PostgresError {
+    const error = new postgres.PostgresError(
+      `duplicate key value violates unique constraint "${constraintName}"`,
+    )
+    error.code = '23505'
+    error.constraint_name = constraintName
+    return error
+  }
+
+  it('maps a users_firebase_uid_idx violation to a firebaseUid UniqueViolationError', () => {
+    const result = mapUniqueViolation(uniqueViolation('users_firebase_uid_idx'))
+
+    expect(result).toBeInstanceOf(UniqueViolationError)
+    expect(result?.field).toBe('firebaseUid')
+  })
+
+  it('maps a users_email_idx violation to an email UniqueViolationError', () => {
+    const result = mapUniqueViolation(uniqueViolation('users_email_idx'))
+
+    expect(result).toBeInstanceOf(UniqueViolationError)
+    expect(result?.field).toBe('email')
+  })
+
+  it('returns null for a Postgres error that is not a unique violation', () => {
+    const notFoundError = new postgres.PostgresError(
+      'relation "users" does not exist',
+    )
+    notFoundError.code = '42P01'
+
+    expect(mapUniqueViolation(notFoundError)).toBeNull()
+  })
+
+  it('returns null for a non-Postgres error', () => {
+    expect(mapUniqueViolation(new Error('connection reset'))).toBeNull()
   })
 })

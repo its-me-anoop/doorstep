@@ -6,7 +6,10 @@ import {
   EstablishSession,
   SESSION_COOKIE_LIFETIME_MS,
 } from '@/services/auth/establish-session'
-import { AccountSuspendedError } from '@/services/auth/errors'
+import {
+  AccountSuspendedError,
+  MissingEmailClaimError,
+} from '@/services/auth/errors'
 
 import { FakeAuthGateway, FakeClock, FakeUserRepository } from './fakes'
 
@@ -50,7 +53,7 @@ describe('EstablishSession', () => {
     expect(stored).toEqual(result.user)
   })
 
-  it('falls back to email, then a default, when the token carries no display name', async () => {
+  it('falls back to the email when the token carries no display name', async () => {
     const { sut, authGateway } = makeSut()
     authGateway.seedCredential(
       'id-token-no-name',
@@ -59,15 +62,20 @@ describe('EstablishSession', () => {
 
     const result = await sut.execute({ idToken: 'id-token-no-name' })
     expect(result.user.displayName).toBe('jamie@example.co.uk')
+  })
 
-    const { sut: sut2, authGateway: gateway2 } = makeSut()
-    gateway2.seedCredential(
-      'id-token-anonymous',
-      identity({ uid: 'uid-3', email: undefined, displayName: undefined }),
+  it('rejects a credential with no email claim and creates no user', async () => {
+    const { sut, authGateway, userRepository } = makeSut()
+    authGateway.seedCredential(
+      'id-token-no-email',
+      identity({ uid: 'uid-3', email: undefined }),
     )
-    const anonymous = await sut2.execute({ idToken: 'id-token-anonymous' })
-    expect(anonymous.user.displayName).toBe('New user')
-    expect(anonymous.user.email).toBe('')
+
+    await expect(sut.execute({ idToken: 'id-token-no-email' })).rejects.toThrow(
+      MissingEmailClaimError,
+    )
+
+    expect(await userRepository.findByFirebaseUid('uid-3')).toBeNull()
   })
 
   it('reuses the existing users row on a later sign-in instead of creating a duplicate', async () => {
@@ -89,6 +97,42 @@ describe('EstablishSession', () => {
     expect(result.user).toEqual(existing)
     // Still exactly one row for this firebase uid — no duplicate created.
     expect(await userRepository.findById('user-existing')).toEqual(existing)
+  })
+
+  it('recovers from a first-sign-in race by returning the row the other concurrent sign-in already created', async () => {
+    const { sut, authGateway, userRepository } = makeSut()
+    authGateway.seedCredential('id-token-1', identity())
+    const winner: User = {
+      id: 'user-race-winner',
+      firebaseUid: 'firebase-uid-1',
+      email: 'jamie@example.co.uk',
+      displayName: 'Jamie Example',
+      role: 'user',
+      agencyId: null,
+      status: 'active',
+    }
+    // Simulates a second, concurrent first sign-in for the same uid: by
+    // the time this request's create() runs, the other request has
+    // already inserted the row, so this create() hits the
+    // users.firebase_uid unique constraint.
+    userRepository.runBeforeNextCreate(() => userRepository.seed(winner))
+
+    const result = await sut.execute({ idToken: 'id-token-1' })
+
+    expect(result.user).toEqual(winner)
+  })
+
+  it('does not mistake an unrelated repository failure for a first-sign-in race', async () => {
+    const { sut, authGateway, userRepository } = makeSut()
+    authGateway.seedCredential('id-token-1', identity())
+    const connectionError = new Error('connection reset by peer')
+    userRepository.runBeforeNextCreate(() => {
+      throw connectionError
+    })
+
+    await expect(sut.execute({ idToken: 'id-token-1' })).rejects.toThrow(
+      connectionError,
+    )
   })
 
   it('rejects an invalid ID token', async () => {

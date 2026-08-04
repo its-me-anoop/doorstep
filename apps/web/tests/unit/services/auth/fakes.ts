@@ -10,7 +10,11 @@ import type {
   RoleClaims,
 } from '@/ports/auth-gateway'
 import type { Clock } from '@/ports/clock'
-import type { User, UserRepository } from '@/ports/user-repository'
+import {
+  UniqueViolationError,
+  type User,
+  type UserRepository,
+} from '@/ports/user-repository'
 
 export class FakeClock implements Clock {
   constructor(private current: Date) {}
@@ -74,6 +78,7 @@ export class FakeAuthGateway implements AuthGateway {
 export class FakeUserRepository implements UserRepository {
   private readonly byId = new Map<string, User>()
   private nextId = 1
+  private beforeNextCreate: (() => void) | null = null
 
   async findById(id: string): Promise<User | null> {
     return this.byId.get(id) ?? null
@@ -87,6 +92,19 @@ export class FakeUserRepository implements UserRepository {
   }
 
   async create(user: Omit<User, 'id'>): Promise<User> {
+    // Runs (once) immediately before the uniqueness check below, so a
+    // test can mutate state — or throw — exactly like another request
+    // would between this call's caller reading findByFirebaseUid and
+    // this create() landing. See runBeforeNextCreate.
+    const hook = this.beforeNextCreate
+    this.beforeNextCreate = null
+    hook?.()
+
+    const clash = this.findUniqueClash(user)
+    if (clash) {
+      throw new UniqueViolationError(clash)
+    }
+
     const created: User = { ...user, id: `user-${this.nextId++}` }
     this.byId.set(created.id, created)
     return created
@@ -105,5 +123,27 @@ export class FakeUserRepository implements UserRepository {
   /** Test helper: seed a user directly, bypassing create(). */
   seed(user: User): void {
     this.byId.set(user.id, user)
+  }
+
+  /**
+   * Test helper: simulates a state change landing between a caller's
+   * findByFirebaseUid check and its create() call — e.g. a concurrent
+   * request winning the same race (seed the winner, so create() then
+   * throws UniqueViolationError like a real unique-index hit) or an
+   * unrelated driver failure (throw any other error, to prove callers
+   * don't mistake it for a unique violation).
+   */
+  runBeforeNextCreate(fn: () => void): void {
+    this.beforeNextCreate = fn
+  }
+
+  private findUniqueClash(
+    user: Omit<User, 'id'>,
+  ): 'firebaseUid' | 'email' | null {
+    for (const existing of this.byId.values()) {
+      if (existing.firebaseUid === user.firebaseUid) return 'firebaseUid'
+      if (existing.email === user.email) return 'email'
+    }
+    return null
   }
 }

@@ -10,13 +10,41 @@
  */
 
 import { eq } from 'drizzle-orm'
+import postgres from 'postgres'
 
-import type { User, UserRepository } from '@/ports/user-repository'
+import {
+  UniqueViolationError,
+  type User,
+  type UserRepository,
+} from '@/ports/user-repository'
 
 import type { Db } from '../client'
 import { users } from '../schema'
 
 type UserRow = typeof users.$inferSelect
+
+const POSTGRES_UNIQUE_VIOLATION = '23505'
+
+/**
+ * Translates a Postgres unique-violation error raised on `users` into the
+ * UserRepository port's typed UniqueViolationError, so services/ never
+ * has to know about a Postgres error code (DIP). Returns null for
+ * anything else, so `create()` can rethrow the original error unchanged.
+ * Pure and DB-free, so — like mapRowToUser — it is unit-tested directly.
+ */
+export function mapUniqueViolation(
+  error: unknown,
+): UniqueViolationError | null {
+  if (
+    !(error instanceof postgres.PostgresError) ||
+    error.code !== POSTGRES_UNIQUE_VIOLATION
+  ) {
+    return null
+  }
+  const field =
+    error.constraint_name === 'users_email_idx' ? 'email' : 'firebaseUid'
+  return new UniqueViolationError(field)
+}
 
 /** Maps a `users` table row to the UserRepository port's `User` shape.
  * Pure and DB-free, so it is unit-tested directly. */
@@ -54,21 +82,25 @@ export class DrizzleUserRepository implements UserRepository {
   }
 
   async create(user: Omit<User, 'id'>): Promise<User> {
-    const [row] = await this.db
-      .insert(users)
-      .values({
-        firebaseUid: user.firebaseUid,
-        email: user.email,
-        displayName: user.displayName,
-        role: user.role,
-        agencyId: user.agencyId,
-        status: user.status,
-      })
-      .returning()
-    if (!row) {
-      throw new Error('DrizzleUserRepository.create: insert returned no row')
+    try {
+      const [row] = await this.db
+        .insert(users)
+        .values({
+          firebaseUid: user.firebaseUid,
+          email: user.email,
+          displayName: user.displayName,
+          role: user.role,
+          agencyId: user.agencyId,
+          status: user.status,
+        })
+        .returning()
+      if (!row) {
+        throw new Error('DrizzleUserRepository.create: insert returned no row')
+      }
+      return mapRowToUser(row)
+    } catch (error) {
+      throw mapUniqueViolation(error) ?? error
     }
-    return mapRowToUser(row)
   }
 
   async update(id: string, changes: Partial<Omit<User, 'id'>>): Promise<User> {
