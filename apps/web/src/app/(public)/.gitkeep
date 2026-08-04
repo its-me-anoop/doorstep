@@ -1,1 +1,0 @@
-Route group: guest + user surfaces (home, search, listing detail, agency pages). No auth required. See PRD §5.1, §8.3.

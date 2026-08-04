@@ -1,130 +1,307 @@
+/*
+  Doorstep — M0 design tokens
+  Direction: "Reading, on paper" — warm editorial, Committed colour strategy,
+  light mode only for M0. See docs in the design handoff for rationale and
+  the contrast-check table this palette was validated against.
+
+  Structure: the Doorstep-native scale tokens (paper, clay, moss, red) are
+  the source of truth; shadcn/ui semantic tokens (--background, --primary,
+  etc.) map from them one layer down so the palette can be retuned without
+  hunting through every component; the @theme inline block re-exposes the
+  semantic tokens as Tailwind v4 utilities.
+*/
+
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 
-@custom-variant dark (&:is(.dark *));
+:root {
+  /* ---------------------------------------------------------------- */
+  /* 1. Doorstep scale tokens — the actual palette (source of truth)  */
+  /* ---------------------------------------------------------------- */
 
+  /* Paper / neutrals — tinted warm, never pure black or white */
+  --paper-50: oklch(97.5% 0.008 60); /* page background  (hex ref #FBF7F2) */
+  --paper-100: oklch(95.5% 0.01 60); /* surface / panels (hex ref #F5EFE7) */
+  --paper-200: oklch(90% 0.014 58); /* hairline borders (hex ref #E4DACD) */
+  --paper-300: oklch(
+    66.5% 0.045 58
+  ); /* strong/input borders (hex ref #967D5E) */
+  --paper-400: oklch(46.5% 0.035 55); /* muted text (hex ref #6B6058) */
+  --ink-900: oklch(21.5% 0.02 50); /* primary text (hex ref #2B2420) */
+
+  /* Clay — the committed brand hue */
+  --clay-500: oklch(
+    51% 0.15 38
+  ); /* primary: buttons, links, ring (hex ref #B34527) */
+  --clay-600: oklch(
+    44% 0.14 37
+  ); /* primary-hover / pressed (hex ref #9A3B21) */
+  --clay-050: oklch(
+    97% 0.02 45
+  ); /* primary-foreground / on-clay text (hex ref #FDF6F1) */
+
+  /* Moss — reserved solely for positive/verified semantic states */
+  --moss-500: oklch(46.5% 0.075 142); /* success text (hex ref #4B6B4A) */
+  --moss-050: oklch(97% 0.015 140); /* success-foreground (hex ref #F3F7F1) */
+
+  /* Signal red — errors only */
+  --red-500: oklch(43.5% 0.18 27); /* destructive text/fill (hex ref #B3261E) */
+  --red-050: oklch(
+    96.5% 0.02 20
+  ); /* destructive-foreground (hex ref #FFF5F3) */
+
+  /* ---------------------------------------------------------------- */
+  /* 2. Radius scale                                                  */
+  /* ---------------------------------------------------------------- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+
+  /* ---------------------------------------------------------------- */
+  /* 3. Spacing rhythm (use unevenly — see design spec §1)            */
+  /* ---------------------------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-24: 96px;
+
+  /* ---------------------------------------------------------------- */
+  /* 4. Type scale — ratio ~1.3125, body 16px, line-height 1.5-1.6    */
+  /* ---------------------------------------------------------------- */
+  --text-xs: 0.75rem; /* 12px — short uppercase labels only */
+  --text-sm: 0.875rem; /* 14px */
+  --text-base: 1rem; /* 16px — body default */
+  --text-lead: 1.125rem; /* 18px */
+  --text-h4: 1.3125rem; /* 21px */
+  --text-h3: 1.75rem; /* 28px */
+  --text-h2: 2.375rem; /* 38px */
+  --text-h1: 3.125rem; /* 50px */
+  --text-display: 4.1875rem; /* 67px, clamp on mobile — see hero-section.tsx */
+
+  --leading-tight: 1.05;
+  --leading-snug: 1.2;
+  --leading-normal: 1.4;
+  --leading-relaxed: 1.6;
+
+  --font-display: var(--font-display, 'Fraunces', ui-serif, Georgia, serif);
+  --font-body: var(--font-body, 'Karla', ui-sans-serif, system-ui, sans-serif);
+
+  /* ---------------------------------------------------------------- */
+  /* 5. shadcn/ui semantic mapping — do not restyle components        */
+  /*    directly; retune the scale tokens above instead.              */
+  /* ---------------------------------------------------------------- */
+  --background: var(--paper-50);
+  --foreground: var(--ink-900);
+
+  --card: var(--paper-100);
+  --card-foreground: var(--ink-900);
+
+  --popover: var(--paper-100);
+  --popover-foreground: var(--ink-900);
+
+  --primary: var(--clay-500);
+  --primary-foreground: var(--clay-050);
+  --primary-hover: var(
+    --clay-600
+  ); /* not a shadcn default var; used directly in component CSS */
+
+  /* Secondary = quiet neutral fill, NOT a second brand hue (Committed strategy) */
+  --secondary: var(--paper-200);
+  --secondary-foreground: var(--ink-900);
+
+  --muted: var(--paper-100);
+  --muted-foreground: var(--paper-400);
+
+  /* Accent = subtle interactive/hover tint, still neutral, not brand-coloured */
+  --accent: var(--paper-200);
+  --accent-foreground: var(--ink-900);
+
+  --destructive: var(--red-500);
+  --destructive-foreground: var(--red-050);
+
+  --success: var(--moss-500);
+  --success-foreground: var(--moss-050);
+
+  --border: var(
+    --paper-200
+  ); /* decorative hairlines, ~1.3:1, never text-bearing */
+  --input: var(--paper-300); /* form field borders, 3.65:1 against background */
+  --ring: var(--clay-500); /* focus ring, 5.19:1 against background */
+
+  --radius: var(--radius-md);
+}
+
+/*
+  Dark mode is a deliberate, future addition — not shipped in M0.
+  When it lands, add a [data-theme="dark"] block re-pointing the same
+  semantic variables (--background, --foreground, --primary, etc.) to
+  dark equivalents of the paper, clay and ink scale tokens; do not invent
+  new variable names.
+*/
+
+/* ---------------------------------------------------------------- */
+/* 6. Tailwind v4 theme bridge — exposes bg-background, text-foreground,*/
+/*    bg-primary, text-primary-foreground, etc. as real utilities.  */
+/* ---------------------------------------------------------------- */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
+
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
-}
+  --color-card-foreground: var(--card-foreground);
 
-:root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-full: var(--radius-full);
+
+  /* Body text everywhere by default; headings opt into --font-display via
+     the h1-h4 rule below and the `font-heading` utility (shadcn Card). */
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-display);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
   html {
     @apply font-sans;
+  }
+}
+
+/* ---------------------------------------------------------------- */
+/* 7. Base element defaults                                          */
+/* ---------------------------------------------------------------- */
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  letter-spacing: 0;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Visible, non-default focus ring everywhere; never remove outline
+   without replacing it. Uses :focus-visible so mouse clicks stay quiet. */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- */
+/* 8. Motion primitives — transform/opacity only, ease-out-expo      */
+/* ---------------------------------------------------------------- */
+:root {
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* Site-wide button interaction motion (impeccable.style: transform/opacity
+   only, no bounce). Un-layered so these reliably win over the shared
+   Button primitive's own Tailwind-layered hover:/active: utilities
+   (components/ui/button.tsx is generated shadcn code, not restyled
+   directly here — CSS cascade layers make an un-layered rule outrank any
+   @layer-scoped Tailwind utility regardless of source order). */
+[data-slot='button'] {
+  transition:
+    background-color 120ms var(--ease-out-quart),
+    transform 80ms var(--ease-out-quart);
+}
+[data-slot='button'].bg-primary:hover {
+  background-color: var(--primary-hover);
+}
+[data-slot='button']:active {
+  transform: scale(0.98);
+}
+
+/* Hero entrance (landing page only, once, on initial paint — never a
+   scroll-retrigger). Pure CSS so hero-section.tsx stays a server
+   component: a keyframe animation just plays once when the element
+   first paints, which is exactly "fires once on mount". */
+@keyframes hero-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.hero-enter > * {
+  animation: hero-enter 400ms var(--ease-out-expo) both;
+}
+.hero-enter > *:nth-child(1) {
+  animation-delay: 0ms;
+}
+.hero-enter > *:nth-child(2) {
+  animation-delay: 60ms;
+}
+.hero-enter > *:nth-child(3) {
+  animation-delay: 120ms;
+}
+.hero-enter > *:nth-child(4) {
+  animation-delay: 180ms;
+}
+
+/* Inline validation / focus states and the account-page inline-edit
+   crossfade share this one opacity transition (motion note §5/§6 in the
+   design spec: reuse, don't invent a fourth motion pattern). */
+.opacity-transition {
+  transition: opacity 150ms var(--ease-out-quart);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }
