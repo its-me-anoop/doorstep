@@ -6,6 +6,15 @@ allowBuilds:
   '@firebase/util': true
   esbuild: true
   protobufjs: true
+  # sharp needs its native libvips binding; unrs-resolver needs its native
+  # resolver binary. Both are already declared in onlyBuiltDependencies
+  # below but pnpm 11's build-script gate requires this separate explicit
+  # per-package approval too (pnpm approve-builds run non-interactively —
+  # e.g. in CI with --frozen-lockfile — just fails with
+  # ERR_PNPM_IGNORED_BUILDS instead of prompting, so this has to be
+  # committed rather than approved ad hoc on a dev machine).
+  sharp: true
+  unrs-resolver: true
 
 onlyBuiltDependencies:
   - '@firebase/util'
