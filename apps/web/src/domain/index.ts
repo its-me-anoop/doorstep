@@ -25,6 +25,7 @@ export type {
   AlertFrequency,
   OutboxOp,
 } from './enums'
+export { USER_ROLES, isUserRole } from './enums'
 
 export {
   InvalidTransitionError,

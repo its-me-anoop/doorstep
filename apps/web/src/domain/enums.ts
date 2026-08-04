@@ -48,6 +48,26 @@ export type CouncilTaxBand = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H'
 /** users.role */
 export type UserRole = 'user' | 'owner' | 'agent' | 'admin'
 
+/**
+ * Runtime companion to `UserRole`, needed anywhere a value (Firebase
+ * custom claim, JWT payload field) has to be checked against the union
+ * rather than just typed as it (PRD §8.4). Kept next to the type it
+ * mirrors so the two can never drift.
+ */
+export const USER_ROLES: readonly UserRole[] = [
+  'user',
+  'owner',
+  'agent',
+  'admin',
+]
+
+export function isUserRole(value: unknown): value is UserRole {
+  return (
+    typeof value === 'string' &&
+    (USER_ROLES as readonly string[]).includes(value)
+  )
+}
+
 /** users.status */
 export type UserStatus = 'active' | 'suspended' | 'banned'
 

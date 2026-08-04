@@ -7,6 +7,26 @@
  * interfaces (DIP) — never on adapters/ or framework types — so they can be
  * unit tested with in-memory fakes.
  *
+ * auth/ (EstablishSession, TerminateSession, GetCurrentUser) and authz/
+ * (canManageListing, requireRole) are the first use cases to land — see
+ * PRD §8.4.
+ *
  * See PRD §8.5.
  */
-export {}
+
+export {
+  EstablishSession,
+  SESSION_COOKIE_LIFETIME_MS,
+  TerminateSession,
+  GetCurrentUser,
+  AccountSuspendedError,
+  UnknownSessionUserError,
+} from './auth'
+export type {
+  EstablishSessionInput,
+  EstablishSessionResult,
+  GetCurrentUserResult,
+} from './auth'
+
+export { ForbiddenError, canManageListing, requireRole } from './authz'
+export type { Actor, ListingSubject } from './authz'

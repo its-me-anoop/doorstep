@@ -1,1 +1,0 @@
-Route handlers only: parse request, call a service, map the result. No business logic here. See PRD §8.5, §10.
