@@ -5,8 +5,7 @@
  * `DecodedIdToken` shape is known about. See PRD §8.4.
  */
 
-import type { DecodedIdToken } from 'firebase-admin/auth'
-import { getAuth } from 'firebase-admin/auth'
+import type { Auth, DecodedIdToken } from 'firebase-admin/auth'
 
 import { isUserRole } from '@/domain/enums'
 import type {
@@ -34,9 +33,18 @@ export function toDecodedIdentity(decoded: DecodedIdToken): DecodedIdentity {
   }
 }
 
+/** firebase-admin/auth is dynamic-imported for the same reason as in
+ * admin-app.ts: a top-level import would make every consumer of the
+ * composition root fail to load on runtimes where firebase-admin's
+ * dependency graph cannot be require()d. */
+async function adminAuth(): Promise<Auth> {
+  const { getAuth } = await import('firebase-admin/auth')
+  return getAuth(await getAdminApp())
+}
+
 export class FirebaseAuthGateway implements AuthGateway {
   async verifyIdToken(idToken: string): Promise<DecodedIdentity> {
-    const decoded = await getAuth(getAdminApp()).verifyIdToken(idToken)
+    const decoded = await (await adminAuth()).verifyIdToken(idToken)
     return toDecodedIdentity(decoded)
   }
 
@@ -44,24 +52,21 @@ export class FirebaseAuthGateway implements AuthGateway {
     idToken: string,
     expiresInMs: number,
   ): Promise<string> {
-    return getAuth(getAdminApp()).createSessionCookie(idToken, {
+    return (await adminAuth()).createSessionCookie(idToken, {
       expiresIn: expiresInMs,
     })
   }
 
   async verifySessionCookie(cookie: string): Promise<DecodedIdentity> {
-    const decoded = await getAuth(getAdminApp()).verifySessionCookie(
-      cookie,
-      true,
-    )
+    const decoded = await (await adminAuth()).verifySessionCookie(cookie, true)
     return toDecodedIdentity(decoded)
   }
 
   async revokeSessions(uid: string): Promise<void> {
-    await getAuth(getAdminApp()).revokeRefreshTokens(uid)
+    await (await adminAuth()).revokeRefreshTokens(uid)
   }
 
   async setRoleClaims(uid: string, claims: RoleClaims): Promise<void> {
-    await getAuth(getAdminApp()).setCustomUserClaims(uid, claims)
+    await (await adminAuth()).setCustomUserClaims(uid, claims)
   }
 }
