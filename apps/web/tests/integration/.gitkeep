@@ -1,0 +1,1 @@
+Adapter integration tests against real containers (Postgres+PostGIS, Meilisearch). See PRD §8.8.
