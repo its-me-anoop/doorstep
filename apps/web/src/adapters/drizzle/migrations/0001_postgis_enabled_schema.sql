@@ -86,6 +86,15 @@ CREATE TABLE "payments" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+-- drizzle-kit auto-generated this table with the "location" column typed
+-- as the quoted identifier "geography(Point,4326)" — that's wrong: quoting
+-- the whole thing makes Postgres look for a type literally named
+-- `geography(Point,4326)`, which doesn't exist, instead of the built-in
+-- `geography` type with a `(Point,4326)` typmod. Hand-corrected to the
+-- unquoted form (same fix rationale as 0000: drizzle-kit doesn't fully
+-- understand PostGIS-specific DDL). Never verified against a real
+-- Postgres+PostGIS instance until CI's integration job got one (PRD §8.8) —
+-- this was a latent bug the whole time.
 CREATE TABLE "properties" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"lister_id" uuid NOT NULL,
@@ -113,7 +122,7 @@ CREATE TABLE "properties" (
 	"town" text NOT NULL,
 	"outcode" text NOT NULL,
 	"postcode" text NOT NULL,
-	"location" "geography(Point,4326)" NOT NULL,
+	"location" geography(Point,4326) NOT NULL,
 	"location_approximate" boolean DEFAULT false NOT NULL,
 	"published_at" timestamp with time zone,
 	"status_changed_at" timestamp with time zone,
