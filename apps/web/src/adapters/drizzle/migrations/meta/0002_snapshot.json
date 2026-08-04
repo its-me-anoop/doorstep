@@ -106,12 +106,8 @@
           "name": "agencies_created_by_users_id_fk",
           "tableFrom": "agencies",
           "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -183,12 +179,8 @@
           "name": "audit_log_actor_id_users_id_fk",
           "tableFrom": "audit_log",
           "tableTo": "users",
-          "columnsFrom": [
-            "actor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actor_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -303,12 +295,8 @@
           "name": "enquiries_property_id_properties_id_fk",
           "tableFrom": "enquiries",
           "tableTo": "properties",
-          "columnsFrom": [
-            "property_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["property_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -316,12 +304,8 @@
           "name": "enquiries_sender_id_users_id_fk",
           "tableFrom": "enquiries",
           "tableTo": "users",
-          "columnsFrom": [
-            "sender_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["sender_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -381,12 +365,8 @@
           "name": "events_user_id_users_id_fk",
           "tableFrom": "events",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -456,12 +436,8 @@
           "name": "outbox_property_id_properties_id_fk",
           "tableFrom": "outbox",
           "tableTo": "properties",
-          "columnsFrom": [
-            "property_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["property_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -559,12 +535,8 @@
           "name": "payments_user_id_users_id_fk",
           "tableFrom": "payments",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -572,12 +544,8 @@
           "name": "payments_agency_id_agencies_id_fk",
           "tableFrom": "payments",
           "tableTo": "agencies",
-          "columnsFrom": [
-            "agency_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["agency_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -932,12 +900,8 @@
           "name": "properties_lister_id_users_id_fk",
           "tableFrom": "properties",
           "tableTo": "users",
-          "columnsFrom": [
-            "lister_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["lister_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -945,12 +909,8 @@
           "name": "properties_agency_id_agencies_id_fk",
           "tableFrom": "properties",
           "tableTo": "agencies",
-          "columnsFrom": [
-            "agency_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["agency_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1058,12 +1018,8 @@
           "name": "property_images_property_id_properties_id_fk",
           "tableFrom": "property_images",
           "tableTo": "properties",
-          "columnsFrom": [
-            "property_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["property_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1104,12 +1060,8 @@
           "name": "saved_properties_user_id_users_id_fk",
           "tableFrom": "saved_properties",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1117,12 +1069,8 @@
           "name": "saved_properties_property_id_properties_id_fk",
           "tableFrom": "saved_properties",
           "tableTo": "properties",
-          "columnsFrom": [
-            "property_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["property_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1130,10 +1078,7 @@
       "compositePrimaryKeys": {
         "saved_properties_user_id_property_id_pk": {
           "name": "saved_properties_user_id_property_id_pk",
-          "columns": [
-            "user_id",
-            "property_id"
-          ]
+          "columns": ["user_id", "property_id"]
         }
       },
       "uniqueConstraints": {},
@@ -1220,12 +1165,8 @@
           "name": "saved_searches_user_id_users_id_fk",
           "tableFrom": "saved_searches",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1350,12 +1291,8 @@
           "name": "users_agency_id_agencies_id_fk",
           "tableFrom": "users",
           "tableTo": "agencies",
-          "columnsFrom": [
-            "agency_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["agency_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1371,89 +1308,47 @@
     "public.alert_frequency": {
       "name": "alert_frequency",
       "schema": "public",
-      "values": [
-        "none",
-        "daily",
-        "instant"
-      ]
+      "values": ["none", "daily", "instant"]
     },
     "public.channel": {
       "name": "channel",
       "schema": "public",
-      "values": [
-        "sale",
-        "rent"
-      ]
+      "values": ["sale", "rent"]
     },
     "public.council_tax_band": {
       "name": "council_tax_band",
       "schema": "public",
-      "values": [
-        "A",
-        "B",
-        "C",
-        "D",
-        "E",
-        "F",
-        "G",
-        "H"
-      ]
+      "values": ["A", "B", "C", "D", "E", "F", "G", "H"]
     },
     "public.enquiry_status": {
       "name": "enquiry_status",
       "schema": "public",
-      "values": [
-        "new",
-        "contacted",
-        "closed"
-      ]
+      "values": ["new", "contacted", "closed"]
     },
     "public.epc_rating": {
       "name": "epc_rating",
       "schema": "public",
-      "values": [
-        "A",
-        "B",
-        "C",
-        "D",
-        "E",
-        "F",
-        "G"
-      ]
+      "values": ["A", "B", "C", "D", "E", "F", "G"]
     },
     "public.furnished": {
       "name": "furnished",
       "schema": "public",
-      "values": [
-        "furnished",
-        "part_furnished",
-        "unfurnished"
-      ]
+      "values": ["furnished", "part_furnished", "unfurnished"]
     },
     "public.image_kind": {
       "name": "image_kind",
       "schema": "public",
-      "values": [
-        "photo",
-        "floorplan",
-        "epc"
-      ]
+      "values": ["photo", "floorplan", "epc"]
     },
     "public.outbox_op": {
       "name": "outbox_op",
       "schema": "public",
-      "values": [
-        "upsert",
-        "delete"
-      ]
+      "values": ["upsert", "delete"]
     },
     "public.payment_purpose": {
       "name": "payment_purpose",
       "schema": "public",
-      "values": [
-        "subscription",
-        "featured_listing"
-      ]
+      "values": ["subscription", "featured_listing"]
     },
     "public.price_qualifier": {
       "name": "price_qualifier",
@@ -1497,31 +1392,17 @@
     "public.tenure": {
       "name": "tenure",
       "schema": "public",
-      "values": [
-        "freehold",
-        "leasehold",
-        "share_of_freehold",
-        "unknown"
-      ]
+      "values": ["freehold", "leasehold", "share_of_freehold", "unknown"]
     },
     "public.user_role": {
       "name": "user_role",
       "schema": "public",
-      "values": [
-        "user",
-        "owner",
-        "agent",
-        "admin"
-      ]
+      "values": ["user", "owner", "agent", "admin"]
     },
     "public.user_status": {
       "name": "user_status",
       "schema": "public",
-      "values": [
-        "active",
-        "suspended",
-        "banned"
-      ]
+      "values": ["active", "suspended", "banned"]
     }
   },
   "schemas": {},
