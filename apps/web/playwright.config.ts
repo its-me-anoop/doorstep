@@ -13,10 +13,24 @@
  *    validation/verification-failure paths to respond correctly).
  */
 
+import { generateKeyPairSync } from 'node:crypto'
+
 import { defineConfig, devices } from '@playwright/test'
 
 const PORT = 3000
 const baseURL = process.env.BASE_URL ?? `http://localhost:${PORT}`
+
+/**
+ * A freshly generated throwaway key, connected to no Firebase project and
+ * used to sign nothing. It must be structurally valid PEM: firebase-admin
+ * parses the service-account credential at init, and the session route
+ * deliberately maps an unparseable key to 500 (server misconfiguration)
+ * while a junk ID token maps to 401 (credential failure). The junk-token
+ * spec asserts the 401 path, so the key has to parse.
+ */
+const THROWAWAY_PRIVATE_KEY = generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+}).privateKey.export({ type: 'pkcs8', format: 'pem' }) as string
 
 /**
  * Placeholder values shaped like .env.example — enough for the app to
@@ -35,8 +49,7 @@ const PLACEHOLDER_ENV = {
   FIREBASE_PROJECT_ID: 'doorstep-test',
   FIREBASE_CLIENT_EMAIL:
     'firebase-adminsdk-test@doorstep-test.iam.gserviceaccount.com',
-  FIREBASE_PRIVATE_KEY:
-    '-----BEGIN PRIVATE KEY-----\nMIIBVgIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEA0Z\n-----END PRIVATE KEY-----\n',
+  FIREBASE_PRIVATE_KEY: THROWAWAY_PRIVATE_KEY,
   PORT: String(PORT),
 }
 
