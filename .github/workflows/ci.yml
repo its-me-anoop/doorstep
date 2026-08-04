@@ -2,8 +2,17 @@ name: CI
 
 # PRD §8.8: typecheck, lint (ESLint + Prettier), unit, integration (service
 # containers), build, Playwright + axe. Merges to main are blocked on all
-# six jobs going green (see branch protection, configured out-of-band via
-# `gh api` — not expressible in this file).
+# six jobs below going green — branch protection requires each job name as
+# a status check, in strict mode (the branch must be up to date with main
+# before a check counts). That's configured out-of-band via `gh api`, not
+# expressible in this file; see
+# https://github.com/its-me-anoop/doorstep/settings/branches.
+#
+# No required PR review count is set. This is a solo-dev repo right now —
+# a mandatory reviewer would just mean self-approving every PR, which is
+# ceremony without a safety benefit. The six status checks are the actual
+# safety net; add a review requirement back the day a second person can
+# review.
 on:
   push:
     branches: [main]
