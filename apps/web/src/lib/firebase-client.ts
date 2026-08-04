@@ -28,8 +28,7 @@ import {
 
 const SESSION_ENDPOINT = '/api/v1/auth/session'
 
-function readEnv(name: string): string {
-  const value = process.env[name]
+function requireEnv(name: string, value: string | undefined): string {
   if (!value) {
     throw new Error(`${name} is not set. Firebase client auth cannot start.`)
   }
@@ -37,11 +36,27 @@ function readEnv(name: string): string {
 }
 
 function firebaseConfig(): FirebaseOptions {
+  // Each variable must be spelled out as a literal `process.env.NEXT_PUBLIC_*`
+  // expression: Next.js inlines client-side env vars by static text
+  // replacement at build time, so dynamic access (process.env[name]) is
+  // always `undefined` in the browser bundle.
   return {
-    apiKey: readEnv('NEXT_PUBLIC_FIREBASE_API_KEY'),
-    authDomain: readEnv('NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN'),
-    projectId: readEnv('NEXT_PUBLIC_FIREBASE_PROJECT_ID'),
-    appId: readEnv('NEXT_PUBLIC_FIREBASE_APP_ID'),
+    apiKey: requireEnv(
+      'NEXT_PUBLIC_FIREBASE_API_KEY',
+      process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    ),
+    authDomain: requireEnv(
+      'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
+      process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    ),
+    projectId: requireEnv(
+      'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
+      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    ),
+    appId: requireEnv(
+      'NEXT_PUBLIC_FIREBASE_APP_ID',
+      process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+    ),
   }
 }
 
