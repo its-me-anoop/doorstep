@@ -16,6 +16,6 @@
     "test:e2e": "pnpm --filter web test:e2e",
     "db:generate": "pnpm --filter web db:generate",
     "db:migrate": "pnpm --filter web db:migrate",
-    "seed": "echo 'seed: implemented in a later step'"
+    "seed": "pnpm --filter web seed"
   }
 }

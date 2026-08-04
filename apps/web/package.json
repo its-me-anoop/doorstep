@@ -13,7 +13,9 @@
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "seed": "tsx scripts/seed.ts",
+    "seed:assert": "tsx scripts/assert-seed-count.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -52,6 +54,7 @@
     "prettier": "^3.9.6",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.5",
     "typescript": "^5",
     "vitest": "^4.1.10"
   }
