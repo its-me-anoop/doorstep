@@ -296,12 +296,21 @@ h4 {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* Zeroing duration alone isn't enough for staggered/delayed animations
+     (.hero-enter's nth-child animation-delay steps): the browser still
+     holds the keyframe's `from` state — here, opacity: 0 — for the full
+     delay window before the now-instant animation runs, so text stays
+     invisible/low-contrast for up to 180ms even though nothing visibly
+     "moves". Zeroing the delays too collapses that to the `to` state
+     immediately, which is what "reduced motion" should mean. */
   *,
   *::before,
   *::after {
     animation-duration: 0.001ms !important;
+    animation-delay: 0s !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+    transition-delay: 0s !important;
     scroll-behavior: auto !important;
   }
 }

@@ -1,0 +1,32 @@
+name: Set up Node + pnpm
+description: >
+  Installs pnpm (version read from the workspace root's packageManager
+  field, so there is exactly one place that pins it), installs Node with
+  the pnpm store cached by lockfile hash, and runs a frozen-lockfile
+  install. Shared by every CI job so the setup sequence lives in one
+  place instead of six copy-pasted blocks.
+
+inputs:
+  node-version:
+    description: Node.js version to install.
+    required: false
+    default: '24'
+
+runs:
+  using: composite
+  steps:
+    # No `version:` input — pnpm/action-setup reads packageManager from
+    # package.json, so bumping the pnpm version is a one-line change in
+    # package.json rather than a change here too.
+    - uses: pnpm/action-setup@v6
+
+    # cache: pnpm shells out to `pnpm store path`, so this must run after
+    # pnpm/action-setup has put pnpm on PATH.
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: pnpm
+
+    - name: Install workspace dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile

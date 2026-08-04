@@ -138,7 +138,7 @@ export function SignInForm({ nextPath, prefillEmail }: SignInFormProps) {
         New to Doorstep?{' '}
         <Link
           href={`/sign-up?next=${encodeURIComponent(nextPath)}`}
-          className="text-primary hover:underline"
+          className="text-primary underline underline-offset-2"
         >
           Create an account
         </Link>

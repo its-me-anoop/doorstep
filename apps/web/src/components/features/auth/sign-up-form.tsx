@@ -167,14 +167,14 @@ export function SignUpForm({ nextPath }: SignUpFormProps) {
                     I agree to the{' '}
                     <Link
                       href="/terms"
-                      className="text-primary hover:underline"
+                      className="text-primary underline underline-offset-2"
                     >
                       Terms
                     </Link>{' '}
                     and{' '}
                     <Link
                       href="/privacy"
-                      className="text-primary hover:underline"
+                      className="text-primary underline underline-offset-2"
                     >
                       Privacy Policy
                     </Link>
@@ -208,7 +208,7 @@ export function SignUpForm({ nextPath }: SignUpFormProps) {
         Already have an account?{' '}
         <Link
           href={`/sign-in?next=${encodeURIComponent(nextPath)}`}
-          className="text-primary hover:underline"
+          className="text-primary underline underline-offset-2"
         >
           Sign in
         </Link>

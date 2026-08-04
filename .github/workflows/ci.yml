@@ -1,0 +1,161 @@
+name: CI
+
+# PRD §8.8: typecheck, lint (ESLint + Prettier), unit, integration (service
+# containers), build, Playwright + axe. Merges to main are blocked on all
+# six jobs going green (see branch protection, configured out-of-band via
+# `gh api` — not expressible in this file).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+# A new push to the same PR/branch supersedes the in-flight run instead of
+# queuing behind it — avoids paying for CI on commits nobody will look at.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Default token scope for every job: read-only. Nothing here deploys or
+# writes back to the repo, so there is no reason to widen this per-job.
+permissions:
+  contents: read
+
+env:
+  # Shared by the build job and (implicitly, baked into playwright.config.ts)
+  # the e2e job's spawned server. Shaped like .env.example — none of these
+  # need to resolve to a real Firebase project or database because every
+  # adapter that reads them (drizzle client, Firebase Admin app, Firebase
+  # client SDK) constructs lazily; see the doc comments on
+  # src/adapters/drizzle/client.ts and src/adapters/firebase/admin-app.ts.
+  PLACEHOLDER_DATABASE_URL: postgres://user:password@localhost:5432/doorstep
+  PLACEHOLDER_FIREBASE_API_KEY: test-api-key
+  PLACEHOLDER_FIREBASE_AUTH_DOMAIN: doorstep-test.firebaseapp.com
+  PLACEHOLDER_FIREBASE_PROJECT_ID: doorstep-test
+  PLACEHOLDER_FIREBASE_APP_ID: '1:000000000000:web:0000000000000000000000'
+  PLACEHOLDER_FIREBASE_CLIENT_EMAIL: firebase-adminsdk-test@doorstep-test.iam.gserviceaccount.com
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-node-pnpm
+      - run: pnpm typecheck
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-node-pnpm
+      - run: pnpm lint
+      # prettier is a devDependency of apps/web only, so pnpm never hoists
+      # its bin to the workspace root — `pnpm exec prettier` from the root
+      # would resolve prettier-plugin-tailwindcss against the wrong
+      # node_modules tree and fail. Invoking apps/web's own binary with
+      # cwd=apps/web sidesteps that. --ignore-path points back at the
+      # repo's single .prettierignore (it deliberately excludes the
+      # generated shadcn output in src/components/ui).
+      - name: Prettier --check
+        working-directory: apps/web
+        run: ./node_modules/.bin/prettier --check --ignore-path ../../.prettierignore .
+
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-node-pnpm
+      - run: pnpm test:unit
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: doorstep
+          POSTGRES_PASSWORD: doorstep
+          POSTGRES_DB: doorstep_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U doorstep -d doorstep_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      # Scaffold only — PRD §8.8/§M2: nothing in M0 queries Meilisearch yet
+      # (no search mapper or sync exists to test). This container exists so
+      # the integration job's shape doesn't change when that lands; it is
+      # not wired into any test today, so it intentionally has no
+      # healthcheck gating the job on it coming up.
+      meilisearch:
+        image: getmeili/meilisearch:v1.48
+        env:
+          MEILI_MASTER_KEY: ci-scaffold-master-key-not-a-secret
+          MEILI_NO_ANALYTICS: 'true'
+        ports:
+          - 7700:7700
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-node-pnpm
+      - name: Run integration tests against the service containers
+        working-directory: apps/web
+        env:
+          TEST_DATABASE_URL: postgres://doorstep:doorstep@localhost:5432/doorstep_test
+        # Applies the real migrations in src/adapters/drizzle/migrations
+        # (including 0000's CREATE EXTENSION postgis/citext) against the
+        # container, then asserts the schema — tests/integration/db.schema.test.ts
+        # skips with this same command locally where TEST_DATABASE_URL is unset.
+        run: pnpm test:integration
+
+  build:
+    needs: [typecheck, lint, unit]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-node-pnpm
+      - name: next build with placeholder public env vars
+        env:
+          DATABASE_URL: ${{ env.PLACEHOLDER_DATABASE_URL }}
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ env.PLACEHOLDER_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ env.PLACEHOLDER_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ env.PLACEHOLDER_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ env.PLACEHOLDER_FIREBASE_APP_ID }}
+          FIREBASE_PROJECT_ID: ${{ env.PLACEHOLDER_FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ env.PLACEHOLDER_FIREBASE_CLIENT_EMAIL }}
+          # Literal \n escapes, not real newlines — matches the contract
+          # documented in .env.example and unescaped by
+          # src/adapters/firebase/admin-app.ts's readPrivateKey(). Not a
+          # real key; nothing in the build or e2e suite performs a real
+          # Admin SDK credential check.
+          FIREBASE_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\nMIIBVgIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEA0Z\n-----END PRIVATE KEY-----\n'
+        run: pnpm build
+
+  e2e:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-node-pnpm
+      - name: Install Chromium (+ OS deps)
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run smoke + axe suite
+        working-directory: apps/web
+        # BASE_URL is intentionally unset: playwright.config.ts's webServer
+        # then builds and starts the app itself against its own baked-in
+        # placeholder env block (see the config's doc comment) — no secrets
+        # needed. This means the app gets built twice across the `build`
+        # and `e2e` jobs; that duplication is deliberate for now (keeps this
+        # job self-contained and matches how a real preview-deploy URL will
+        # slot into BASE_URL later) but is a candidate to collapse via a
+        # shared build artifact once that's worth the added complexity.
+        run: pnpm test:e2e
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
