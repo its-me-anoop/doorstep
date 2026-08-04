@@ -8,7 +8,7 @@ import postgres from 'postgres'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import * as schema from '@/adapters/drizzle/schema'
-import { properties, users } from '@/adapters/drizzle/schema'
+import { agencies, properties, users } from '@/adapters/drizzle/schema'
 
 // This suite talks to a real Postgres+PostGIS instance and runs the actual
 // migrations in src/adapters/drizzle/migrations. There is no Docker and no
@@ -115,5 +115,19 @@ describe.skipIf(!TEST_DATABASE_URL)('Drizzle schema (live database)', () => {
       .where(eq(properties.id, property!.id))
 
     expect(found?.location).toEqual(readingCentre)
+  })
+
+  it('rejects an agency whose created_by does not reference an existing user (PRD §9.2)', async () => {
+    await expect(
+      db.insert(agencies).values({
+        name: 'Ghost Agency',
+        slug: `ghost-agency-${crypto.randomUUID()}`,
+        phone: '01189000000',
+        email: `ghost-${crypto.randomUUID()}@example.co.uk`,
+        website: 'https://example.co.uk',
+        address: '1 Nowhere Street, Reading',
+        createdBy: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow()
   })
 })

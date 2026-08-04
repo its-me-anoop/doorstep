@@ -16,6 +16,7 @@
 
 import { sql } from 'drizzle-orm'
 import {
+  type AnyPgColumn,
   boolean,
   date,
   index,
@@ -173,9 +174,17 @@ export const agencies = pgTable(
     website: text('website').notNull(),
     address: text('address').notNull(),
     verified: boolean('verified').notNull().default(false),
-    // FK to users declared below via .references() to avoid a circular
-    // top-level reference; users.agencyId also points back at agencies.
-    createdBy: uuid('created_by').notNull(),
+    // Forward reference to `users`, declared further down this file. The
+    // explicit `AnyPgColumn` return annotation is required (not just
+    // stylistic) because `users.agencyId` references `agencies` right
+    // back — without it, TS can't resolve the mutually-recursive
+    // `agencies`/`users` table types and errors with TS7022/TS7024. This
+    // is Drizzle's documented pattern for circular FK references. The two
+    // tables form a genuine FK cycle; scripts/seed.ts's insert/delete
+    // ordering deliberately breaks it.
+    createdBy: uuid('created_by')
+      .notNull()
+      .references((): AnyPgColumn => users.id),
     ...timestamps,
   },
   (t) => [uniqueIndex('agencies_slug_idx').on(t.slug)],
