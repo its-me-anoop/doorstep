@@ -1,8 +1,9 @@
 name: CI
 
 # PRD §8.8: typecheck, lint (ESLint + Prettier), unit, integration (service
-# containers), build, Playwright + axe. Merges to main are blocked on all
-# six jobs below going green — branch protection requires each job name as
+# containers + the Firebase Storage emulator), build, Playwright + axe.
+# Merges to main are blocked on all six jobs below going green — branch
+# protection requires each job name as
 # a status check, in strict mode (the branch must be up to date with main
 # before a check counts). That's configured out-of-band via `gh api`, not
 # expressible in this file; see
@@ -108,15 +109,52 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-node-pnpm
-      - name: Run integration tests against the service containers
-        working-directory: apps/web
+      # The Firebase Storage emulator (next step) ships as a Java jar.
+      # ubuntu-latest images bundle several JDKs already, but pinning one
+      # explicitly here — rather than relying on whatever happens to be on
+      # PATH by default — keeps this job's Java version an explicit,
+      # intentional choice instead of an ambient runner-image detail.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Run integration tests against the service containers + Storage emulator
         env:
           TEST_DATABASE_URL: postgres://doorstep:doorstep@localhost:5432/doorstep_test
+          # tests/integration/image-storage-firebase-emulator.contract.test.ts
+          # gates on this (via firebase-storage-adapter.ts's
+          # resolveStorageEmulatorHost) and runs the REAL
+          # FirebaseStorageAdapter's full contract suite against it — no
+          # FIREBASE_PROJECT_ID/CLIENT_EMAIL/PRIVATE_KEY needed here: that
+          # test file synthesises its own throwaway (but structurally
+          # valid — firebase-admin's cert() parses the key regardless of
+          # whether it's ever used to authenticate anything real) Admin
+          # SDK credential when none is already configured, the same way
+          # playwright.config.ts's THROWAWAY_PRIVATE_KEY does. This is the
+          # M1 exit criterion — "contract tests green on the storage
+          # adapter" — running against a real Storage API surface in CI
+          # from now on, not just the always-on in-memory fake.
+          FIREBASE_STORAGE_EMULATOR_HOST: 127.0.0.1:9199
+        # firebase.json/storage.rules live at the repo root (this job's
+        # cwd — see firebase-storage-adapter.ts's header comment for why
+        # there rather than apps/web/), so this runs from the root, using
+        # the root package.json's proxied test:integration script rather
+        # than apps/web's own (equivalent; keeps this step's cwd matching
+        # firebase.json's location instead of adding a --config flag).
+        # `emulators:exec` starts the emulator, waits for it to be ready,
+        # runs the wrapped command, and tears the emulator down again
+        # afterwards either way — including when the command fails — so
+        # this can't leak a background emulator process into later steps.
+        # "demo-doorstep" (the `demo-` prefix is a firebase-tools
+        # convention for "never a real project") keeps this fully local.
+        # Wraps the whole test:integration run, not a Storage-only subset:
+        # the Postgres-backed suites don't care that the emulator is also
+        # up, and one integration-test command is simpler than two.
         # Applies the real migrations in src/adapters/drizzle/migrations
         # (including 0000's CREATE EXTENSION postgis/citext) against the
         # container, then asserts the schema — tests/integration/db.schema.test.ts
         # skips with this same command locally where TEST_DATABASE_URL is unset.
-        run: pnpm test:integration
+        run: npx --yes firebase-tools@15.9.0 emulators:exec --only storage --project demo-doorstep "pnpm test:integration"
       - name: Apply migrations for the seed step
         working-directory: apps/web
         env:
