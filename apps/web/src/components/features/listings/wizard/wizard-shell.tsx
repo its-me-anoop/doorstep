@@ -18,9 +18,10 @@ import { StepChannelType } from './step-channel-type'
 import { StepDescription } from './step-description'
 import { StepDetails } from './step-details'
 import { StepIndicator } from './step-indicator'
-import { StepPhotosPlaceholder } from './step-photos-placeholder'
+import { StepPhotos } from './step-photos'
 import { StepReview } from './step-review'
 import { useAutosave } from './use-autosave'
+import { useListingImages } from './use-listing-images'
 import { useStepValidation } from './use-step-validation'
 import { WizardActionBar } from './wizard-action-bar'
 import {
@@ -68,6 +69,12 @@ interface WizardShellProps {
  * step links and Review's Edit links both use exactly that), so nothing
  * is unreachable — this is a documented scope trim, not a missing
  * feature.
+ *
+ * Images (step 5/photos) live outside the RHF form entirely — they're
+ * their own resource with their own endpoints (PRD §6.5 LST-3), not a
+ * `draftListingSchema` field — so useListingImages owns that slice of
+ * state independently and is loaded once here, shared by StepPhotos (the
+ * uploader) and StepReview (the read-only cover/count summary).
  */
 export function WizardShell({
   listingId,
@@ -83,6 +90,7 @@ export function WizardShell({
     currentStep === 6 ? 4 : (currentStep as 1 | 2 | 3 | 4),
     form,
   )
+  const listingImages = useListingImages(listingId)
 
   // useWatch() with no `name` is typed as DeepPartial — RHF can't prove
   // statically that every key is populated — but `initialValues` always
@@ -156,13 +164,23 @@ export function WizardShell({
           {currentStep === 4 && (
             <StepDescription form={form} validation={validation} />
           )}
-          {currentStep === 5 && <StepPhotosPlaceholder />}
+          {currentStep === 5 && (
+            <StepPhotos
+              listingId={listingId}
+              images={listingImages.images}
+              status={listingImages.status}
+              onImageAdded={listingImages.onImageAdded}
+              onImagesReplaced={listingImages.onImagesReplaced}
+              onImageRemoved={listingImages.onImageRemoved}
+            />
+          )}
           {currentStep === 6 && (
             <StepReview
               form={form}
               listingId={listingId}
               isRejected={status === 'rejected'}
               onEditStep={goToStep}
+              images={listingImages.images}
             />
           )}
         </div>

@@ -22,6 +22,11 @@ vi.mock('@/lib/listings-client', () => ({
   },
 }))
 
+const listListingImagesMock = vi.fn().mockResolvedValue([])
+vi.mock('@/lib/images-client', () => ({
+  listListingImages: (...args: unknown[]) => listListingImagesMock(...args),
+}))
+
 import { WizardShell } from '@/components/features/listings/wizard/wizard-shell'
 import { listingToFormValues } from '@/lib/listing-wizard-form'
 import type { Listing } from '@/ports/listing-repository'
@@ -176,5 +181,33 @@ describe('WizardShell', () => {
     expect(
       screen.queryByRole('button', { name: 'Continue' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('step 5 loads and renders the wizard photo step', async () => {
+    renderShell(freshDraft(), '5')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Photos' }),
+    ).toBeInTheDocument()
+    expect(listListingImagesMock).toHaveBeenCalledWith('listing-1')
+  })
+
+  it('step 6 review shows the photo count loaded by useListingImages', async () => {
+    listListingImagesMock.mockResolvedValueOnce([
+      {
+        id: 'img-1',
+        propertyId: 'listing-1',
+        kind: 'photo',
+        position: 0,
+        width: 400,
+        height: 300,
+        blurhash: 'LGF5?xYk^6#M@-5c,1J5@[or[Q6.',
+        altText: null,
+        urls: [],
+      },
+    ])
+    renderShell(freshDraft(), '6')
+
+    expect(await screen.findByText('1 photo added')).toBeInTheDocument()
   })
 })

@@ -16,6 +16,7 @@ vi.mock('@/lib/listings-client', () => ({
 
 import { Form } from '@/components/ui/form'
 import { StepReview } from '@/components/features/listings/wizard/step-review'
+import type { ListingImage } from '@/lib/images-client'
 import type { ListingFormValues } from '@/lib/listing-wizard-form'
 
 const COMPLETE_SALE: ListingFormValues = {
@@ -43,14 +44,31 @@ const COMPLETE_SALE: ListingFormValues = {
   features: ['Garden', 'Garage'],
 }
 
+function image(overrides: Partial<ListingImage> = {}): ListingImage {
+  return {
+    id: 'img-1',
+    propertyId: 'listing-1',
+    kind: 'photo',
+    position: 0,
+    width: 400,
+    height: 300,
+    blurhash: 'LGF5?xYk^6#M@-5c,1J5@[or[Q6.',
+    altText: null,
+    urls: [{ width: 400, format: 'webp', url: 'https://cdn.test/cover.webp' }],
+    ...overrides,
+  }
+}
+
 function Harness({
   values = COMPLETE_SALE,
   isRejected = false,
   onEditStep = vi.fn(),
+  images = [],
 }: {
   values?: ListingFormValues
   isRejected?: boolean
   onEditStep?: (step: number) => void
+  images?: ListingImage[]
 } = {}) {
   const form = useForm<ListingFormValues>({ defaultValues: values })
   return (
@@ -60,6 +78,7 @@ function Harness({
         listingId="listing-1"
         isRejected={isRejected}
         onEditStep={onEditStep}
+        images={images}
       />
     </Form>
   )
@@ -98,6 +117,51 @@ describe('StepReview', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[1])
     expect(onEditStep).toHaveBeenCalledWith(2)
+  })
+
+  it('the Photos section says "No photos added yet" with no cover thumbnail when empty', () => {
+    render(<Harness images={[]} />)
+
+    expect(screen.getByText('No photos added yet')).toBeInTheDocument()
+    expect(screen.queryByAltText('Cover photo')).not.toBeInTheDocument()
+  })
+
+  it('the Photos section shows the count and the position-0 image as the cover thumbnail', () => {
+    render(
+      <Harness
+        images={[
+          image({ id: 'img-2', position: 1 }),
+          image({ id: 'img-1', position: 0 }),
+        ]}
+      />,
+    )
+
+    expect(screen.getByText('2 photos added')).toBeInTheDocument()
+    expect(screen.getByAltText('Cover photo')).toHaveAttribute(
+      'src',
+      'https://cdn.test/cover.webp',
+    )
+  })
+
+  it('ignores floorplan/epc images when counting photos', () => {
+    render(
+      <Harness
+        images={[
+          image({ id: 'img-1', kind: 'photo', position: 0 }),
+          image({ id: 'img-2', kind: 'floorplan', position: 1 }),
+        ]}
+      />,
+    )
+
+    expect(screen.getByText('1 photo added')).toBeInTheDocument()
+  })
+
+  it('the Photos section’s Edit link jumps to step 5', () => {
+    const onEditStep = vi.fn()
+    render(<Harness onEditStep={onEditStep} />)
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[4])
+    expect(onEditStep).toHaveBeenCalledWith(5)
   })
 
   it('shows a fix-it rollup when a required field is missing, with no rollup item for photos', () => {

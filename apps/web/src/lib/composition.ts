@@ -19,8 +19,8 @@
  * §10) is the fourth, wired to PostcodesIoGeocoder: the postcode fast
  * path only for M1 — see that adapter's doc comment for the Mapbox
  * fallback TODO(M2). `images` (RequestImageUpload, ProcessImage,
- * ReorderImages, SetImageKind, DeleteImage — PRD §6.5 LST-3, §8.7) is the
- * fifth, wired to FirebaseStorageAdapter and the new
+ * ReorderImages, SetImageKind, DeleteImage, ListListingImages — PRD §6.5
+ * LST-3, §8.7) is the fifth, wired to FirebaseStorageAdapter and the new
  * DrizzlePropertyImageRepository; FirebaseStorageAdapter's constructor
  * reads no env var itself (see that class's doc comment) so this
  * function's own eager-construction-of-everything shape still never
@@ -57,6 +57,7 @@ import {
 import { SearchGeocode } from '@/services/geocoding'
 import {
   DeleteImage,
+  ListListingImages,
   ProcessImage,
   ReorderImages,
   RequestImageUpload,
@@ -102,6 +103,7 @@ export interface ImageServices {
   reorderImages: ReorderImages
   setImageKind: SetImageKind
   deleteImage: DeleteImage
+  listListingImages: ListListingImages
 }
 
 export interface Services {
@@ -185,6 +187,11 @@ export function createServices(): Services {
       deleteImage: new DeleteImage(
         listingRepository,
         propertyImageRepository,
+        propertyImageRepository,
+        imageStorage,
+      ),
+      listListingImages: new ListListingImages(
+        listingRepository,
         propertyImageRepository,
         imageStorage,
       ),

@@ -7,6 +7,7 @@ import type { UseFormReturn } from 'react-hook-form'
 
 import { Button } from '@/components/ui/button'
 import { formatPrice } from '@/domain/money'
+import type { ListingImage } from '@/lib/images-client'
 import { ListingsApiError, submitListing } from '@/lib/listings-client'
 import type { ListingFormValues } from '@/lib/listing-wizard-form'
 import { validateWizardStep } from '@/lib/validation/listing-wizard'
@@ -21,7 +22,7 @@ import {
 const EDITABLE_STEPS = [1, 2, 3, 4] as const
 
 interface SummaryGroupProps {
-  step: Exclude<WizardStepNumber, 5 | 6>
+  step: Exclude<WizardStepNumber, 6>
   onEditStep: (step: WizardStepNumber) => void
   children: React.ReactNode
 }
@@ -70,6 +71,11 @@ interface StepReviewProps {
   listingId: string
   isRejected: boolean
   onEditStep: (step: WizardStepNumber) => void
+  /** Every image the wizard currently knows about (all kinds) — sourced
+   * from wizard-shell.tsx's useListingImages, the same list StepPhotos
+   * itself renders from. Defaults to empty so existing callers/tests that
+   * pre-date the photo step keep working unchanged. */
+  images?: ListingImage[]
 }
 
 /** M1-DESIGN-SPEC.md §3.6: the read-only summary, the fix-it rollup, and
@@ -79,12 +85,19 @@ export function StepReview({
   listingId,
   isRejected,
   onEditStep,
+  images = [],
 }: StepReviewProps) {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [confirmedAddress, setConfirmedAddress] = useState<string | null>(null)
 
   const values = form.getValues()
+
+  const photos = images
+    .filter((image) => image.kind === 'photo')
+    .sort((a, b) => a.position - b.position)
+  const photoCount = photos.length
+  const coverPhoto = photos[0]
 
   const rollup = EDITABLE_STEPS.flatMap((step) => {
     const { fieldErrors } = validateWizardStep(
@@ -236,14 +249,23 @@ export function StepReview({
         />
       </SummaryGroup>
 
-      <section className="flex flex-col gap-3">
-        <h3 className="text-[length:var(--text-h4)]">Photos</h3>
-        <p className="text-muted-foreground max-w-[60ch] text-sm leading-relaxed">
-          Photo upload isn&rsquo;t available in this update yet. At least 1
-          photo is required before a listing can be approved — you&rsquo;ll be
-          able to add photos, and then submit, once that ships.
-        </p>
-      </section>
+      <SummaryGroup step={5} onEditStep={onEditStep}>
+        <div className="flex items-center gap-3">
+          {coverPhoto?.urls[0] && (
+            // eslint-disable-next-line @next/next/no-img-element -- a remote, already-optimised variant URL, not a local asset.
+            <img
+              src={coverPhoto.urls[0].url}
+              alt="Cover photo"
+              className="aspect-[4/3] w-16 rounded-[var(--radius-sm)] object-cover"
+            />
+          )}
+          <p className="text-foreground text-base">
+            {photoCount === 0
+              ? 'No photos added yet'
+              : `${photoCount} photo${photoCount === 1 ? '' : 's'} added`}
+          </p>
+        </div>
+      </SummaryGroup>
 
       <div className="flex flex-col gap-4">
         <p className="text-muted-foreground max-w-[60ch] text-base leading-relaxed">

@@ -295,6 +295,27 @@ h4 {
   transition: opacity 150ms var(--ease-out-quart);
 }
 
+/* Photo-tile processing pulse (M1-DESIGN-SPEC.md §1.5): a real state
+   signal — processing is genuinely in progress — not decoration. The
+   "Processing…" label is hidden by default and only shown under reduced
+   motion (below), since the pulse alone carries no information without
+   motion. */
+@keyframes photo-tile-processing-pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.photo-tile-processing {
+  animation: photo-tile-processing-pulse 1600ms ease-in-out infinite;
+}
+.photo-tile-processing-label {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* Zeroing duration alone isn't enough for staggered/delayed animations
      (.hero-enter's nth-child animation-delay steps): the browser still
@@ -312,5 +333,12 @@ h4 {
     transition-duration: 0.001ms !important;
     transition-delay: 0s !important;
     scroll-behavior: auto !important;
+  }
+
+  /* The pulse above is now visually a near-static tile (its animation
+     collapses to an instant, imperceptible loop) — surface the label the
+     pulse alone would otherwise have carried (§1.5). */
+  .photo-tile-processing-label {
+    display: block;
   }
 }

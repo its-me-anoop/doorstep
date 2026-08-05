@@ -37,6 +37,12 @@
  *     before calling the writer), and a rare duplicate position is a
  *     display-order glitch the lister can fix with a drag-reorder, not a
  *     data-integrity problem.
+ *  6. The freshly-inserted row is returned via attach-image-urls.ts's
+ *     attachImageUrls rather than the bare row: `PropertyImageEntity`
+ *     only ever stores `storagePath`, the private original (PRD §8.7
+ *     point 3), so without this the wizard's photo grid client
+ *     (M1-DESIGN-SPEC.md §1.5) would have nothing to point an `<img
+ *     src>` at once processing completes.
  */
 
 import sharp from 'sharp'
@@ -53,7 +59,6 @@ import {
   type ListingReader,
 } from '@/ports/listing-repository'
 import type {
-  PropertyImage,
   PropertyImageReader,
   PropertyImageWriter,
 } from '@/ports/property-image-repository'
@@ -61,6 +66,10 @@ import type { User } from '@/ports/user-repository'
 import { canManageListing, ForbiddenError } from '@/services/authz/policies'
 
 import { AccountSuspendedError } from '../auth/errors'
+import {
+  attachImageUrls,
+  type PropertyImageWithUrls,
+} from './attach-image-urls'
 import { OriginalImageNotFoundError } from './errors'
 
 /** The square box a blurhash's source thumbnail is fit inside (PRD §8.7:
@@ -81,7 +90,7 @@ export class ProcessImage {
     actor: User,
     listingId: string,
     imageId: string,
-  ): Promise<PropertyImage> {
+  ): Promise<PropertyImageWithUrls> {
     if (actor.status !== 'active') {
       throw new AccountSuspendedError(actor.status)
     }
@@ -117,7 +126,7 @@ export class ProcessImage {
 
     const position = await this.propertyImageReader.countByProperty(listingId)
 
-    return this.propertyImageWriter.create({
+    const created = await this.propertyImageWriter.create({
       id: imageId,
       propertyId: listingId,
       kind: 'photo',
@@ -128,6 +137,8 @@ export class ProcessImage {
       blurhash,
       altText: null,
     })
+
+    return attachImageUrls(created, this.imageStorage)
   }
 
   private async computeBlurhashFor(corrected: Buffer): Promise<string> {

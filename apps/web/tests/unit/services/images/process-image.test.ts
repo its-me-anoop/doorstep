@@ -200,8 +200,23 @@ describe('ProcessImage', () => {
       ),
     ).toBe(false)
 
-    // The row was actually persisted, not just returned.
-    expect(await imageRepository.findById('img-1')).toEqual(result)
+    // A public URL for every one of those four variants comes back too
+    // (services/images/attach-image-urls.ts), not just the bare row.
+    expect(result.urls).toHaveLength(4)
+    expect(result.urls).toContainEqual({
+      width: 400,
+      format: 'webp',
+      url: await imageStorage.publicUrl(
+        variantImagePath('listing-1', 'img-1', 400, 'webp'),
+      ),
+    })
+
+    // The row was actually persisted, not just returned — `result` adds
+    // the derived `urls` array on top of the persisted row, so compare
+    // against everything else.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring off `urls` to compare the rest against the persisted row.
+    const { urls, ...persisted } = result
+    expect(await imageRepository.findById('img-1')).toEqual(persisted)
 
     // EXIF/GPS is gone from every generated variant.
     const variantBytes = await imageStorage.get(
