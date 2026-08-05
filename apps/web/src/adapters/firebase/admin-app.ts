@@ -36,6 +36,20 @@ export function normalizePrivateKey(raw: string): string {
     key = key.slice(1, -1)
   }
   key = key.replace(/\\n/g, '\n')
+
+  // Rebuild canonical PEM from the markers outward: strip every kind of
+  // whitespace from the base64 body (paste often collapses newlines into
+  // spaces, which OpenSSL rejects) and rewrap at 64 columns.
+  const match = key.match(
+    /-----BEGIN ([A-Z0-9 ]+)-----([\s\S]*?)-----END \1-----/,
+  )
+  if (match) {
+    const label = match[1]
+    const body = match[2].replace(/\s/g, '')
+    const wrapped = body.match(/.{1,64}/g)?.join('\n') ?? body
+    return `-----BEGIN ${label}-----\n${wrapped}\n-----END ${label}-----\n`
+  }
+
   return key.endsWith('\n') ? key : key + '\n'
 }
 
