@@ -41,5 +41,22 @@ describe('ports barrel', () => {
       expect(services.listers.becomeOwner).toBeDefined()
       expect(services.listers.createAgency).toBeDefined()
     })
+
+    it('wires the listings service group', () => {
+      const services = createServices()
+
+      expect(services.listings.createListingDraft).toBeDefined()
+      expect(services.listings.updateListing).toBeDefined()
+      expect(services.listings.submitListing).toBeDefined()
+      expect(services.listings.changeListingStatus).toBeDefined()
+      expect(services.listings.getListing).toBeDefined()
+      expect(services.listings.listMyListings).toBeDefined()
+    })
+
+    it('wires the geocoding service group', () => {
+      const services = createServices()
+
+      expect(services.geocoding.searchGeocode).toBeDefined()
+    })
   })
 })

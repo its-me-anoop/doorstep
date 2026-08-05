@@ -12,12 +12,17 @@
 
 export type {
   Listing,
-  ListingId,
-  ListingStatus,
-  ListingChannel,
+  ListingCursorPage,
+  ListListingsOptions,
+  NewListingDraft,
+  ListingUpdateFields,
+  ListingPriceChangeEvent,
+  ListingSideEffects,
+  ListingTransitionOptions,
   ListingReader,
   ListingWriter,
 } from './listing-repository'
+export { ListingNotFoundError } from './listing-repository'
 export type {
   User,
   UserRole,

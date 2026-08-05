@@ -1,0 +1,91 @@
+/**
+ * GET/PATCH /api/v1/listings/{id} — PRD §10: "Edit draft or published
+ * listing". Object-level: manager only in M1 (services/listings/
+ * get-listing.ts, update-listing.ts's canManageListing) — the *public*
+ * detail page is reached by slug (GET /api/v1/properties/{slug}) and is
+ * M2+, not this route.
+ *
+ * Thin per PRD §8.5: resolve the session, parse the PATCH body against
+ * lib/validation/listing.ts's draftListingSchema (the same schema POST
+ * /api/v1/listings uses — see that route's doc comment), call a service,
+ * map the result to `{ data: { listing } }`.
+ */
+
+import { NextResponse, type NextRequest } from 'next/server'
+
+import { apiError } from '@/lib/api-error'
+import { createServices } from '@/lib/composition'
+import { mapCommonListingError } from '@/lib/listing-api-errors'
+import { resolveSessionUser } from '@/lib/resolve-session-user'
+import { SESSION_COOKIE_NAME } from '@/lib/session-cookie-name'
+import { draftListingSchema } from '@/lib/validation/listing'
+import {
+  ListingChannelImmutableError,
+  ListingNotEditableError,
+} from '@/services/listings'
+
+interface RouteContext {
+  params: Promise<{ id: string }>
+}
+
+export async function GET(
+  request: NextRequest,
+  { params }: RouteContext,
+): Promise<NextResponse> {
+  const { auth, listings } = createServices()
+
+  try {
+    const actor = await resolveSessionUser(request, auth.getCurrentUser)
+    if (!actor) return apiError(401, 'unauthenticated', 'Sign in to continue.')
+
+    const { id } = await params
+    const listing = await listings.getListing.execute(actor, id)
+    return NextResponse.json({ data: { listing } })
+  } catch (error) {
+    const mapped = mapCommonListingError(error)
+    if (mapped) return mapped
+    console.error('GET /api/v1/listings/[id] failed:', error)
+    return apiError(500, 'internal_error', 'Something went wrong on our side')
+  }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: RouteContext,
+): Promise<NextResponse> {
+  if (!request.cookies.get(SESSION_COOKIE_NAME)?.value) {
+    return apiError(401, 'unauthenticated', 'Sign in to continue.')
+  }
+
+  const rawBody: unknown = await request.json().catch(() => null)
+  const parsed = draftListingSchema.safeParse(rawBody)
+  if (!parsed.success) {
+    return apiError(
+      400,
+      'invalid_request',
+      parsed.error.issues[0]?.message ?? 'Invalid request body',
+    )
+  }
+
+  const { auth, listings } = createServices()
+
+  try {
+    const actor = await resolveSessionUser(request, auth.getCurrentUser)
+    if (!actor) return apiError(401, 'unauthenticated', 'Sign in to continue.')
+
+    const { id } = await params
+    const listing = await listings.updateListing.execute(actor, id, parsed.data)
+    return NextResponse.json({ data: { listing } })
+  } catch (error) {
+    if (error instanceof ListingNotEditableError) {
+      return apiError(409, 'listing_not_editable', error.message)
+    }
+    if (error instanceof ListingChannelImmutableError) {
+      return apiError(400, 'invalid_request', error.message)
+    }
+    const mapped = mapCommonListingError(error)
+    if (mapped) return mapped
+    console.error('PATCH /api/v1/listings/[id] failed:', error)
+    return apiError(500, 'internal_error', 'Something went wrong on our side')
+  }
+}

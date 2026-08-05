@@ -37,6 +37,11 @@ export { getDisplayStatus } from './display-status'
 export { formatPrice } from './money'
 export type { FormatPriceInput } from './money'
 export { slugify } from './slug'
+export { generateListingTitle, generateListingSlug } from './listing-copy'
+export type {
+  GenerateListingTitleInput,
+  GenerateListingSlugInput,
+} from './listing-copy'
 
 export type { UserEntity } from './user'
 export type { PropertyEntity, GeoPoint } from './property'

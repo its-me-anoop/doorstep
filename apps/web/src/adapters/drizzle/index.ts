@@ -19,6 +19,10 @@ export {
   mapRowToAgency,
 } from './repositories/agency-repository'
 export {
+  DrizzleListingRepository,
+  mapRowToListing,
+} from './repositories/listing-repository'
+export {
   geographyPoint,
   citext,
   encodeGeographyPoint,

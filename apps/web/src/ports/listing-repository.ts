@@ -1,50 +1,178 @@
 /**
- * ListingRepository, split per ISP.
+ * ListingRepository, split per ISP: ListingReader for read paths (the
+ * lister dashboard's list view, object-level GET), ListingWriter for the
+ * wizard and status controls. See PRD §8.5, §9.2, §9.3, §6.5 LST-2/4/5.
  *
- * Public/search-facing code should depend on ListingReader only; the
- * lister dashboard and moderation flows depend on ListingWriter. Neither
- * side is forced to depend on methods it never calls. See PRD §8.5, §9.2,
- * §9.3.
+ * `Listing` reuses domain/property.ts's `PropertyEntity` directly, the
+ * same choice ports/agency-repository.ts made for `Agency` over
+ * `AgencyEntity`: listing management needs essentially the whole
+ * `properties` row, so a port-local subset would just redeclare the same
+ * ~25 columns for no gain.
  *
- * The `Listing` shape here is a minimal projection of the `properties`
- * table (PRD §9.2). It is intentionally not the full domain entity —
- * later work in domain/ owns the real entity, value objects, and the
- * status state machine; ports may narrow their input/output types to that
- * entity once it exists.
+ * Transactional guarantee (PRD §8.6): "every visibility-relevant mutation
+ * writes a row to an outbox table in the same transaction." Two
+ * ListingWriter methods carry that guarantee — updateWithSideEffects and
+ * transitionWithOutbox — by writing the properties row AND its
+ * outbox/events rows inside one database transaction, implemented
+ * entirely inside adapters/drizzle/repositories/listing-repository.ts
+ * (services/listings/* never see a transaction handle; DIP). Plain
+ * `update` has no side effects to make atomic and is used for edits to a
+ * listing that isn't currently publicly visible.
  */
 
-export type ListingId = string
+import type { OutboxOp, PropertyStatus } from '@/domain/enums'
+import type { PropertyEntity } from '@/domain/property'
 
-export type ListingStatus =
-  | 'draft'
-  | 'pending_review'
-  | 'rejected'
-  | 'published'
-  | 'under_offer'
-  | 'completed'
-  | 'hidden'
-  | 'archived'
+export type Listing = PropertyEntity
 
-export type ListingChannel = 'sale' | 'rent'
+export interface ListingCursorPage<T> {
+  data: T[]
+  /** The value to pass as `cursor` to fetch the next page; null once the
+   * last page has been reached. */
+  nextCursor: string | null
+}
 
-export interface Listing {
-  id: ListingId
-  listerId: string
-  agencyId: string | null
-  channel: ListingChannel
-  status: ListingStatus
-  title: string
-  slug: string
-  price: number
+export interface ListListingsOptions {
+  /** Opaque — always a previous page's `nextCursor`. See
+   * DrizzleListingRepository's doc comment for the id-ordering it encodes
+   * (properties.id is a UUID v7, so it is itself time-ordered). */
+  cursor?: string | null
+  limit?: number
 }
 
 export interface ListingReader {
-  findById(id: ListingId): Promise<Listing | null>
+  findById(id: string): Promise<Listing | null>
   findBySlug(slug: string): Promise<Listing | null>
+  /** A lister's own listings, newest first — POST /api/v1/listings's GET
+   * counterpart for an owner, or an agent viewing just their own. */
+  listByLister(
+    listerId: string,
+    options?: ListListingsOptions,
+  ): Promise<ListingCursorPage<Listing>>
+  /** Every listing under an agency, newest first — an agent's "my
+   * agency's listings" view (PRD §10). */
+  listByAgency(
+    agencyId: string,
+    options?: ListListingsOptions,
+  ): Promise<ListingCursorPage<Listing>>
+}
+
+/**
+ * Fields CreateListingDraft (services/listings/) supplies when inserting a
+ * new draft. `status` is always 'draft', and `publishedAt`/
+ * `statusChangedAt`/`rejectionReason` are always null at creation — the
+ * writer sets those itself rather than trusting a caller-supplied value.
+ */
+export type NewListingDraft = Omit<
+  Listing,
+  | 'id'
+  | 'status'
+  | 'publishedAt'
+  | 'statusChangedAt'
+  | 'rejectionReason'
+  | 'createdAt'
+  | 'updatedAt'
+>
+
+/**
+ * Fields a PATCH may change. Excludes everything that is either immutable
+ * after creation (`listerId`, `agencyId`, `channel` — changing sale/rent
+ * on an existing listing is a new listing, not an edit) or exclusively
+ * server-managed (`status` and the status-machine timestamps move only
+ * through transitionWithOutbox; `title`/`slug` are derived, never
+ * client-edited — see domain/listing-copy.ts's doc comment).
+ */
+export type ListingUpdateFields = Partial<
+  Omit<
+    Listing,
+    | 'id'
+    | 'listerId'
+    | 'agencyId'
+    | 'channel'
+    | 'status'
+    | 'title'
+    | 'slug'
+    | 'publishedAt'
+    | 'statusChangedAt'
+    | 'rejectionReason'
+    | 'createdAt'
+    | 'updatedAt'
+  >
+>
+
+export interface ListingPriceChangeEvent {
+  previous: number
+  next: number
+}
+
+export interface ListingSideEffects {
+  /** Write an outbox `upsert` row in the same transaction — set when
+   * editing a listing that is currently publicly visible (published,
+   * under_offer), so search stays in sync within a minute (PRD §8.6).
+   * Omitted for edits to a draft/rejected/pending_review listing, which
+   * isn't indexed either way. */
+  outboxUpsert?: boolean
+  /** Write an `events` row named `listing_price_changed` in the same
+   * transaction — set only when the edit actually changes `price` (PRD
+   * §6.5 LST-4: "price changes are tracked ... the data is captured from
+   * day one"). */
+  priceChangeEvent?: ListingPriceChangeEvent
+}
+
+export interface ListingTransitionOptions {
+  statusChangedAt: Date
+  /** Stamped only on a listing's first publish — never overwritten by a
+   * later transition (PRD §9.2: property_images... publishedAt null until
+   * then). Omit on every other transition. */
+  publishedAt?: Date
+  /** `'upsert'` when `to` is publicly visible (published, under_offer);
+   * `'delete'` when `to` stops being visible (hidden, completed); `null`
+   * when the transition doesn't change visibility either side (e.g.
+   * pending_review -> rejected). See
+   * services/listings/change-listing-status.ts. */
+  outboxOp: OutboxOp | null
 }
 
 export interface ListingWriter {
-  create(listing: Omit<Listing, 'id'>): Promise<Listing>
-  update(id: ListingId, changes: Partial<Omit<Listing, 'id'>>): Promise<Listing>
-  delete(id: ListingId): Promise<void>
+  createDraft(draft: NewListingDraft): Promise<Listing>
+  /** Plain update, no side effects — draft/rejected/pending_review edits,
+   * which are never publicly visible so there is nothing to keep in sync
+   * (PRD §6.5 LST-4: "editing a draft or rejected listing is
+   * unrestricted"). */
+  update(id: string, changes: ListingUpdateFields): Promise<Listing>
+  /** Same as `update`, but writes `sideEffects` in the same transaction —
+   * used for edits to an already-visible listing. See this file's doc
+   * comment for the transactional guarantee. */
+  updateWithSideEffects(
+    id: string,
+    changes: ListingUpdateFields,
+    sideEffects: ListingSideEffects,
+  ): Promise<Listing>
+  /**
+   * Moves `status` to `to` and writes/removes the outbox visibility row
+   * per `options.outboxOp`, atomically. Does not itself validate that
+   * `to` is a legal transition from the listing's current status — callers
+   * (services/listings/*) check that first with
+   * domain/property-status-machine.ts's assertTransition.
+   */
+  transitionWithOutbox(
+    id: string,
+    to: PropertyStatus,
+    options: ListingTransitionOptions,
+  ): Promise<Listing>
+}
+
+/** Thrown by services/listings/* (not by the writer methods themselves —
+ * every write is preceded by a ListingReader.findById the service already
+ * needs for authz, so by the time a writer method runs the id is known
+ * good) when a requested listing id does not exist. Route handlers map
+ * this to 404. */
+export class ListingNotFoundError extends Error {
+  readonly id: string
+
+  constructor(id: string) {
+    super(`No listing with id ${id}`)
+    this.name = 'ListingNotFoundError'
+    this.id = id
+  }
 }
