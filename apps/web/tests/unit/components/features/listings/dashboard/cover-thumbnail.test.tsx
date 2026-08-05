@@ -14,6 +14,18 @@ describe('CoverThumbnail', () => {
     expect(screen.getByLabelText('No photo yet')).toBeInTheDocument()
   })
 
+  // WCAG 4.1.2 (axe rule aria-prohibited-attr): `aria-label` is only
+  // valid ARIA on an element whose role supports naming — a bare `<div>`
+  // with no role does not, exactly like the has-a-blurhash branch below
+  // already gets right with `role="img"`.
+  it('gives the no-photo tile an img role so its aria-label is valid ARIA', () => {
+    render(<CoverThumbnail blurhash={null} />)
+
+    expect(
+      screen.getByRole('img', { name: 'No photo yet' }),
+    ).toBeInTheDocument()
+  })
+
   it('renders a blurhash-derived colour tile when a blurhash is given', () => {
     render(<CoverThumbnail blurhash="LGF5?xYk^6#M@-5c,1J5@[or[Q6." />)
 

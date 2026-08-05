@@ -192,6 +192,17 @@ describe('WizardShell', () => {
     expect(listListingImagesMock).toHaveBeenCalledWith('listing-1')
   })
 
+  it('Continue on step 5 (Photos) advances to step 6 (Review)', async () => {
+    renderShell(freshDraft(), '5')
+    await screen.findByRole('heading', { name: 'Photos' })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    })
+
+    expect(pushMock).toHaveBeenCalledWith('?step=6')
+  })
+
   it('step 6 review shows the photo count loaded by useListingImages', async () => {
     listListingImagesMock.mockResolvedValueOnce([
       {

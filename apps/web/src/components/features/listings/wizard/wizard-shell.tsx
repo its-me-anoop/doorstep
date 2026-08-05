@@ -110,7 +110,7 @@ export function WizardShell({
   }
 
   function handleContinue() {
-    if (currentStep >= 5) return
+    if (currentStep >= WIZARD_STEP_COUNT) return
     if (currentStep <= 4 && !validation.validateStep()) return
     autosave.saveNow()
     goToStep((currentStep + 1) as WizardStepNumber)

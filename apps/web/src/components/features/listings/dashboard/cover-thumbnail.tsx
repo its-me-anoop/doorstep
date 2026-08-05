@@ -25,6 +25,7 @@ export function CoverThumbnail({ blurhash }: CoverThumbnailProps) {
   if (!blurhash) {
     return (
       <div
+        role="img"
         aria-label="No photo yet"
         className="bg-secondary flex aspect-[4/3] w-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)]"
       >
