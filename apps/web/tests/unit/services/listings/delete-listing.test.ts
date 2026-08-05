@@ -106,10 +106,7 @@ describe('DeleteListing', () => {
     )
 
     await expect(
-      sut.execute(
-        user({ role: 'agent', agencyId: 'agency-b' }),
-        'listing-1',
-      ),
+      sut.execute(user({ role: 'agent', agencyId: 'agency-b' }), 'listing-1'),
     ).rejects.toThrow(ForbiddenError)
   })
 
@@ -159,7 +156,9 @@ describe('DeleteListing', () => {
 
   it('allows an admin to delete any draft', async () => {
     const { sut, listingRepository } = makeSut()
-    listingRepository.seed(listing({ status: 'draft', listerId: 'someone-else' }))
+    listingRepository.seed(
+      listing({ status: 'draft', listerId: 'someone-else' }),
+    )
 
     await sut.execute(user({ role: 'admin' }), 'listing-1')
 

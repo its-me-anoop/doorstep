@@ -13,7 +13,7 @@
  * client's storage path before this row exists).
  */
 
-import { asc, count, eq } from 'drizzle-orm'
+import { and, asc, count, eq } from 'drizzle-orm'
 
 import type { ImageKind } from '@/domain/enums'
 import {
@@ -76,6 +76,22 @@ export class DrizzlePropertyImageRepository
       .select({ value: count() })
       .from(propertyImages)
       .where(eq(propertyImages.propertyId, propertyId))
+    return row?.value ?? 0
+  }
+
+  async countByPropertyAndKind(
+    propertyId: string,
+    kind: ImageKind,
+  ): Promise<number> {
+    const [row] = await this.db
+      .select({ value: count() })
+      .from(propertyImages)
+      .where(
+        and(
+          eq(propertyImages.propertyId, propertyId),
+          eq(propertyImages.kind, kind),
+        ),
+      )
     return row?.value ?? 0
   }
 

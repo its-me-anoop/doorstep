@@ -174,6 +174,51 @@ describe('RequestImageUpload', () => {
     ).resolves.toBeDefined()
   })
 
+  // M1-DESIGN-SPEC.md §1.5: floorplan/EPC are "each a single-purpose
+  // slot, not part of the 25-photo grid" — the cap must count only
+  // kind: 'photo' images, not floorplan/EPC alongside them.
+  it('allows a 25th photo when a floorplan and an EPC are already present', async () => {
+    const { sut, listingRepository, imageRepository } = makeSut()
+    listingRepository.seed(listing())
+    imageRepository.seed(
+      image({ id: 'img-floorplan', kind: 'floorplan', position: 0 }),
+    )
+    imageRepository.seed(image({ id: 'img-epc', kind: 'epc', position: 0 }))
+    for (let i = 0; i < MAX_IMAGES_PER_LISTING - 1; i++) {
+      imageRepository.seed(
+        image({ id: `img-${i}`, kind: 'photo', position: i }),
+      )
+    }
+
+    await expect(
+      sut.execute(user(), 'listing-1', {
+        contentType: 'image/jpeg',
+        bytes: 1024,
+      }),
+    ).resolves.toBeDefined()
+  })
+
+  it('still rejects a 26th photo when a floorplan and an EPC are already present', async () => {
+    const { sut, listingRepository, imageRepository } = makeSut()
+    listingRepository.seed(listing())
+    imageRepository.seed(
+      image({ id: 'img-floorplan', kind: 'floorplan', position: 0 }),
+    )
+    imageRepository.seed(image({ id: 'img-epc', kind: 'epc', position: 0 }))
+    for (let i = 0; i < MAX_IMAGES_PER_LISTING; i++) {
+      imageRepository.seed(
+        image({ id: `img-${i}`, kind: 'photo', position: i }),
+      )
+    }
+
+    await expect(
+      sut.execute(user(), 'listing-1', {
+        contentType: 'image/jpeg',
+        bytes: 1024,
+      }),
+    ).rejects.toThrow(TooManyImagesError)
+  })
+
   it('returns a fresh imageId, an uploadUrl and the original storage path', async () => {
     const { sut, listingRepository } = makeSut()
     listingRepository.seed(listing())

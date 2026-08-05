@@ -36,6 +36,12 @@ export interface PropertyImageReader {
    * 0 is the cover (PRD §9.2). */
   listByProperty(propertyId: string): Promise<PropertyImage[]>
   countByProperty(propertyId: string): Promise<number>
+  /** Same as `countByProperty`, restricted to one `kind`. Exists for the
+   * 25-photo cap (PRD §6.5 LST-3, M1-DESIGN-SPEC.md §1.5): floorplan/EPC
+   * are "each a single-purpose slot, not part of the 25-photo grid", so
+   * the cap in services/images/request-image-upload.ts must count only
+   * kind: 'photo' rows, not floorplan/EPC alongside them. */
+  countByPropertyAndKind(propertyId: string, kind: ImageKind): Promise<number>
 }
 
 export interface PropertyImageWriter {

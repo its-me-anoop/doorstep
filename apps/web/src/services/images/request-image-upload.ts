@@ -78,9 +78,12 @@ export class RequestImageUpload {
       throw new ForbiddenError('You do not manage this listing')
     }
 
-    const existingCount =
-      await this.propertyImageReader.countByProperty(listingId)
-    if (existingCount >= MAX_IMAGES_PER_LISTING) {
+    // Scoped to kind: 'photo' — floorplan/EPC are each a single-purpose
+    // slot, not part of the 25-photo grid (M1-DESIGN-SPEC.md §1.5), so
+    // they must not count against this cap.
+    const existingPhotoCount =
+      await this.propertyImageReader.countByPropertyAndKind(listingId, 'photo')
+    if (existingPhotoCount >= MAX_IMAGES_PER_LISTING) {
       throw new TooManyImagesError(MAX_IMAGES_PER_LISTING)
     }
 

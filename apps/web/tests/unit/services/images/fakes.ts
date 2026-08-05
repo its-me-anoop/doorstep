@@ -36,6 +36,15 @@ export class FakePropertyImageRepository
     ).length
   }
 
+  async countByPropertyAndKind(
+    propertyId: string,
+    kind: ImageKind,
+  ): Promise<number> {
+    return [...this.byId.values()].filter(
+      (image) => image.propertyId === propertyId && image.kind === kind,
+    ).length
+  }
+
   async create(image: NewPropertyImage): Promise<PropertyImage> {
     const now = new Date()
     const created: PropertyImage = { ...image, createdAt: now, updatedAt: now }

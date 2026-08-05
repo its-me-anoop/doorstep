@@ -147,6 +147,27 @@ describe.skipIf(!TEST_DATABASE_URL)(
       expect(await imageRepository.countByProperty(listing.id)).toBe(2)
     })
 
+    it('counts images for a property scoped to one kind, excluding other kinds', async () => {
+      expect(
+        await imageRepository.countByPropertyAndKind(listing.id, 'photo'),
+      ).toBe(0)
+
+      await imageRepository.create(newImage({ kind: 'photo', position: 0 }))
+      await imageRepository.create(newImage({ kind: 'photo', position: 1 }))
+      await imageRepository.create(newImage({ kind: 'floorplan', position: 0 }))
+      await imageRepository.create(newImage({ kind: 'epc', position: 0 }))
+
+      expect(
+        await imageRepository.countByPropertyAndKind(listing.id, 'photo'),
+      ).toBe(2)
+      expect(
+        await imageRepository.countByPropertyAndKind(listing.id, 'floorplan'),
+      ).toBe(1)
+      expect(
+        await imageRepository.countByPropertyAndKind(listing.id, 'epc'),
+      ).toBe(1)
+    })
+
     it('updatePosition changes only the position', async () => {
       const created = await imageRepository.create(newImage({ position: 0 }))
 
