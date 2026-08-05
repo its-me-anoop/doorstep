@@ -160,6 +160,19 @@ export interface ListingWriter {
     to: PropertyStatus,
     options: ListingTransitionOptions,
   ): Promise<Listing>
+  /**
+   * Deletes a listing row outright — the one hard delete in this port
+   * (every other mutation is a status transition, PRD §9.3). Callers
+   * (services/listings/delete-listing.ts) restrict this to draft
+   * listings only; this method itself does not re-check status, mirroring
+   * `update`'s own "the writer persists, the service decides" split.
+   * `property_images` rows cascade-delete at the schema level
+   * (adapters/drizzle/schema.ts's `onDelete: 'cascade'`) — this method
+   * does not additionally clean up those images' storage objects (see
+   * services/listings/delete-listing.ts's doc comment for why that's a
+   * documented gap, not an oversight).
+   */
+  delete(id: string): Promise<void>
 }
 
 /** Thrown by services/listings/* (not by the writer methods themselves —

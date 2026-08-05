@@ -63,6 +63,26 @@ export class ListingIncompleteError extends Error {
 }
 
 /**
+ * DeleteListing (M1-DESIGN-SPEC.md §4.3/§4.4: "Delete draft" is the one
+ * irreversible, non-transition dashboard action, offered only on a draft
+ * row) rejects a delete of any listing whose status isn't `draft` —
+ * hiding/archiving is a status transition, not a substitute for deleting
+ * a draft that was never worth keeping. There is no DELETE affordance in
+ * the PRD for a listing that has ever left draft; once real moderation or
+ * public history exists for it, the visibility-transition actions
+ * (hide/archive) are the only way to remove it from view.
+ */
+export class ListingNotDeletableError extends Error {
+  readonly status: PropertyStatus
+
+  constructor(status: PropertyStatus) {
+    super(`Listing with status "${status}" cannot be deleted`)
+    this.name = 'ListingNotDeletableError'
+    this.status = status
+  }
+}
+
+/**
  * ChangeListingStatus (PRD §6.5 LST-5) rejects `sold_stc` on a rent
  * listing and `let_agreed` on a sale listing — each action is only
  * meaningful for its own channel.

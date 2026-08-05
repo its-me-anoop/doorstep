@@ -1,14 +1,21 @@
 /**
- * GET/PATCH /api/v1/listings/{id} — PRD §10: "Edit draft or published
- * listing". Object-level: manager only in M1 (services/listings/
- * get-listing.ts, update-listing.ts's canManageListing) — the *public*
- * detail page is reached by slug (GET /api/v1/properties/{slug}) and is
- * M2+, not this route.
+ * GET/PATCH/DELETE /api/v1/listings/{id} — PRD §10: "Edit draft or
+ * published listing", plus the M1-DESIGN-SPEC.md §4.3/§4.4 "Delete draft"
+ * dashboard action (DELETE — see services/listings/delete-listing.ts's
+ * doc comment for why this is an M1 contract addition beyond the PRD's
+ * original API surface, not a PRD-documented endpoint). Object-level:
+ * manager only in M1 (services/listings/get-listing.ts, update-listing.ts,
+ * delete-listing.ts's shared canManageListing) — the *public* detail page
+ * is reached by slug (GET /api/v1/properties/{slug}) and is M2+, not this
+ * route.
  *
  * Thin per PRD §8.5: resolve the session, parse the PATCH body against
  * lib/validation/listing.ts's draftListingSchema (the same schema POST
  * /api/v1/listings uses — see that route's doc comment), call a service,
- * map the result to `{ data: { listing } }`.
+ * map the result. DELETE has no body — like POST .../submit, the target
+ * listing is entirely identified by the path segment — and returns
+ * `{ data: { deleted: true } }` rather than the listing itself, since
+ * there is nothing left to return.
  */
 
 import { NextResponse, type NextRequest } from 'next/server'
@@ -21,6 +28,7 @@ import { SESSION_COOKIE_NAME } from '@/lib/session-cookie-name'
 import { draftListingSchema } from '@/lib/validation/listing'
 import {
   ListingChannelImmutableError,
+  ListingNotDeletableError,
   ListingNotEditableError,
 } from '@/services/listings'
 
@@ -86,6 +94,34 @@ export async function PATCH(
     const mapped = mapCommonListingError(error)
     if (mapped) return mapped
     console.error('PATCH /api/v1/listings/[id] failed:', error)
+    return apiError(500, 'internal_error', 'Something went wrong on our side')
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: RouteContext,
+): Promise<NextResponse> {
+  if (!request.cookies.get(SESSION_COOKIE_NAME)?.value) {
+    return apiError(401, 'unauthenticated', 'Sign in to continue.')
+  }
+
+  const { auth, listings } = createServices()
+
+  try {
+    const actor = await resolveSessionUser(request, auth.getCurrentUser)
+    if (!actor) return apiError(401, 'unauthenticated', 'Sign in to continue.')
+
+    const { id } = await params
+    await listings.deleteListing.execute(actor, id)
+    return NextResponse.json({ data: { deleted: true } })
+  } catch (error) {
+    if (error instanceof ListingNotDeletableError) {
+      return apiError(409, 'listing_not_deletable', error.message)
+    }
+    const mapped = mapCommonListingError(error)
+    if (mapped) return mapped
+    console.error('DELETE /api/v1/listings/[id] failed:', error)
     return apiError(500, 'internal_error', 'Something went wrong on our side')
   }
 }

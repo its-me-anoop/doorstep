@@ -8,10 +8,15 @@ import postgres from 'postgres'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { DrizzleListingRepository } from '@/adapters/drizzle/repositories/listing-repository'
+import { DrizzlePropertyImageRepository } from '@/adapters/drizzle/repositories/property-image-repository'
 import { DrizzleUserRepository } from '@/adapters/drizzle/repositories/user-repository'
 import * as schema from '@/adapters/drizzle/schema'
 import { events, outbox } from '@/adapters/drizzle/schema'
-import type { NewListingDraft } from '@/ports/listing-repository'
+import {
+  ListingNotFoundError,
+  type NewListingDraft,
+} from '@/ports/listing-repository'
+import type { NewPropertyImage } from '@/ports/property-image-repository'
 import type { User } from '@/ports/user-repository'
 
 // Exercises DrizzleListingRepository against a real Postgres+PostGIS
@@ -266,6 +271,41 @@ describe.skipIf(!TEST_DATABASE_URL)(
         .from(outbox)
         .where(eq(outbox.propertyId, created.id))
       expect(outboxRows).toHaveLength(0)
+    })
+
+    it('delete() removes the row outright — findById returns null afterwards', async () => {
+      const created = await listingRepository.createDraft(draft())
+
+      await listingRepository.delete(created.id)
+
+      expect(await listingRepository.findById(created.id)).toBeNull()
+    })
+
+    it('delete() cascade-deletes the listing’s property_images rows (schema-level onDelete: cascade)', async () => {
+      const created = await listingRepository.createDraft(draft())
+      const propertyImageRepository = new DrizzlePropertyImageRepository(db)
+      const image: NewPropertyImage = {
+        id: crypto.randomUUID(),
+        propertyId: created.id,
+        kind: 'photo',
+        storagePath: `listings/${created.id}/original/${crypto.randomUUID()}`,
+        position: 0,
+        width: 1600,
+        height: 1200,
+        blurhash: 'LKO2?U%2Tw=w]~RBVZRi};RPxuwH',
+        altText: null,
+      }
+      await propertyImageRepository.create(image)
+
+      await listingRepository.delete(created.id)
+
+      expect(await propertyImageRepository.findById(image.id)).toBeNull()
+    })
+
+    it('delete() throws ListingNotFoundError for an unknown id', async () => {
+      await expect(
+        listingRepository.delete(crypto.randomUUID()),
+      ).rejects.toThrow(ListingNotFoundError)
     })
 
     it('paginates listByLister newest-first with a working cursor (id is a time-ordered UUID v7)', async () => {

@@ -120,6 +120,11 @@ export class FakeListingRepository implements ListingReader, ListingWriter {
     return updated
   }
 
+  async delete(id: string): Promise<void> {
+    this.getOrThrow(id)
+    this.byId.delete(id)
+  }
+
   /** Test helper: seed a listing directly, bypassing createDraft(). */
   seed(listing: Listing): void {
     if (!this.byId.has(listing.id)) this.insertionOrder.push(listing.id)

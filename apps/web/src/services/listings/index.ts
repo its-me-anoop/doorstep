@@ -1,10 +1,10 @@
 /**
  * services/listings/
  *
- * The create-listing wizard's data-side use cases (PRD §6.5 LST-2, LST-4,
- * LST-5): CreateListingDraft, UpdateListing, SubmitListing,
- * ChangeListingStatus. See each file's doc comment for its slice of the
- * PRD §9.3 state machine.
+ * The create-listing wizard's and my-listings dashboard's data-side use
+ * cases (PRD §6.5 LST-2, LST-4, LST-5): CreateListingDraft, UpdateListing,
+ * SubmitListing, ChangeListingStatus, ListMyListings, DeleteListing. See
+ * each file's doc comment for its slice of the PRD §9.3 state machine.
  */
 
 export { CreateListingDraft } from './create-listing-draft'
@@ -16,9 +16,11 @@ export {
 } from './change-listing-status'
 export { GetListing } from './get-listing'
 export { ListMyListings } from './list-my-listings'
+export { DeleteListing } from './delete-listing'
 export {
   ListingNotEditableError,
   ListingChannelImmutableError,
   ListingIncompleteError,
+  ListingNotDeletableError,
   ListingActionChannelMismatchError,
 } from './errors'

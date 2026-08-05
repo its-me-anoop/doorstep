@@ -136,6 +136,34 @@
   --ring: var(--clay-500); /* focus ring, 5.19:1 against background */
 
   --radius: var(--radius-md);
+
+  /* ---------------------------------------------------------------- */
+  /* 5b. Status badge tonal pairs (M1-DESIGN-SPEC.md §1.3) — the         */
+  /*    my-listings dashboard row badge. Every pair is an alias onto a  */
+  /*    scale token above, not a new OKLCH value; see that section's    */
+  /*    contrast table for the ratio each pair clears.                  */
+  /* ---------------------------------------------------------------- */
+  --status-draft-bg: var(--secondary);
+  --status-draft-fg: var(--secondary-foreground);
+
+  --status-pending-bg: var(--clay-050);
+  --status-pending-fg: var(--clay-600);
+
+  --status-rejected-bg: var(--red-050);
+  --status-rejected-fg: var(--red-500);
+
+  --status-published-bg: var(--moss-050);
+  --status-published-fg: var(--moss-500);
+
+  --status-underoffer-bg: var(--clay-500);
+  --status-underoffer-fg: var(--clay-050);
+
+  --status-completed-bg: var(--moss-500);
+  --status-completed-fg: var(--moss-050);
+
+  --status-hidden-bg: var(--paper-100);
+  --status-hidden-fg: var(--paper-400);
+  --status-hidden-border: var(--paper-300);
 }
 
 /*
@@ -181,6 +209,23 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  /* Status badge tonal pairs (§5b above) */
+  --color-status-draft-bg: var(--status-draft-bg);
+  --color-status-draft-fg: var(--status-draft-fg);
+  --color-status-pending-bg: var(--status-pending-bg);
+  --color-status-pending-fg: var(--status-pending-fg);
+  --color-status-rejected-bg: var(--status-rejected-bg);
+  --color-status-rejected-fg: var(--status-rejected-fg);
+  --color-status-published-bg: var(--status-published-bg);
+  --color-status-published-fg: var(--status-published-fg);
+  --color-status-underoffer-bg: var(--status-underoffer-bg);
+  --color-status-underoffer-fg: var(--status-underoffer-fg);
+  --color-status-completed-bg: var(--status-completed-bg);
+  --color-status-completed-fg: var(--status-completed-fg);
+  --color-status-hidden-bg: var(--status-hidden-bg);
+  --color-status-hidden-fg: var(--status-hidden-fg);
+  --color-status-hidden-border: var(--status-hidden-border);
 
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);

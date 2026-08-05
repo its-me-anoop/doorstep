@@ -247,6 +247,14 @@ export class DrizzleListingRepository implements ListingReader, ListingWriter {
     })
   }
 
+  async delete(id: string): Promise<void> {
+    const [row] = await this.db
+      .delete(properties)
+      .where(eq(properties.id, id))
+      .returning({ id: properties.id })
+    if (!row) throw new ListingNotFoundError(id)
+  }
+
   private async listBy(
     predicate: SQL,
     { cursor, limit = DEFAULT_PAGE_LIMIT }: ListListingsOptions = {},

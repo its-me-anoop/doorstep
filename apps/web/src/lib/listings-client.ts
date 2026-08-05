@@ -1,11 +1,13 @@
 /**
  * lib/listings-client.ts — the browser-side calls behind the
- * create-listing wizard (PRD §6.5 LST-2, M1-DESIGN-SPEC.md §3): the
- * create-draft POST, the wizard's autosave PATCH, the final submit POST
- * and the postcode-lookup GET. Mirrors lib/onboarding-client.ts's shape
- * (a typed error class + one `request` helper unwrapping the
- * `{ error: { code, message } }` envelope, lib/api-error.ts) rather than
- * introducing a second convention.
+ * create-listing wizard (PRD §6.5 LST-2, M1-DESIGN-SPEC.md §3) and the
+ * my-listings dashboard (PRD §6.5 LST-5, M1-DESIGN-SPEC.md §4): the
+ * create-draft POST, the wizard's autosave PATCH, the final submit POST,
+ * the postcode-lookup GET, the dashboard's own listing/page fetch, its
+ * one-click status-transition POST, and its delete-draft DELETE. Mirrors
+ * lib/onboarding-client.ts's shape (a typed error class + one `request`
+ * helper unwrapping the `{ error: { code, message } }` envelope,
+ * lib/api-error.ts) rather than introducing a second convention.
  *
  * Unlike onboarding's routes, every listings route already returns a
  * specific, human-readable `message` in its error envelope (the zod
@@ -18,8 +20,9 @@
  */
 
 import type { DraftListingInput } from './validation/listing'
-import type { Listing } from '@/ports/listing-repository'
+import type { Listing, ListingCursorPage } from '@/ports/listing-repository'
 import type { GeocodeResult } from '@/ports/geocoder'
+import type { ListingStatusAction } from '@/services/listings/change-listing-status'
 
 export class ListingsApiError extends Error {
   constructor(
@@ -109,4 +112,69 @@ export async function geocodeSearch(query: string): Promise<GeocodeResult[]> {
     `/api/v1/geocode?q=${encodeURIComponent(query)}`,
   )
   return results
+}
+
+/** POST /api/v1/listings/{id}/status — the dashboard's one-click status
+ * transitions (M1-DESIGN-SPEC.md §4.3/§4.4): Mark Sold STC/Let Agreed,
+ * Mark Sold/Let, Hide, Unhide, Back on market. The caller fires this
+ * immediately alongside its own optimistic paint, per §4.4's
+ * implementation note — it never waits for the 6-second undo window. */
+export function changeListingStatus(
+  id: string,
+  action: ListingStatusAction,
+): Promise<Listing> {
+  return postJson<{ listing: Listing }>(`/api/v1/listings/${id}/status`, {
+    action,
+  }).then(({ listing }) => listing)
+}
+
+/** DELETE /api/v1/listings/{id} — the dashboard's "Delete draft" inline
+ * confirm (§4.3/§4.4), the API's one hard delete. No body, and the
+ * envelope's `data` carries no listing to unwrap (there is nothing left
+ * to return), unlike this file's other calls. */
+export async function deleteListing(id: string): Promise<void> {
+  await request<{ deleted: true }>(`/api/v1/listings/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export interface ListMyListingsOptions {
+  cursor?: string | null
+  limit?: number
+}
+
+/** GET /api/v1/listings — the dashboard's "Load more" cursor pagination
+ * (§4). Deliberately doesn't go through this file's `request` helper:
+ * that helper's `ApiEnvelope` only ever unwraps a nested `data.<key>`
+ * object (every other route in this file returns `{ data: { listing } }`
+ * or similar); this route's own envelope is `{ data, nextCursor }` with
+ * `data` itself the listing array (app/api/v1/listings/route.ts's own
+ * doc comment explains why), so this call parses that shape directly
+ * rather than bending the shared helper's contract for one route. */
+export async function listMyListings(
+  options: ListMyListingsOptions = {},
+): Promise<ListingCursorPage<Listing>> {
+  const params = new URLSearchParams()
+  if (options.cursor) params.set('cursor', options.cursor)
+  if (options.limit !== undefined) params.set('limit', String(options.limit))
+  const query = params.toString()
+
+  const response = await fetch(
+    `/api/v1/listings${query ? `?${query}` : ''}`,
+    undefined,
+  )
+  const json: {
+    data?: Listing[]
+    nextCursor?: string | null
+    error?: { code?: string; message?: string }
+  } | null = await response.json().catch(() => null)
+
+  if (!response.ok) {
+    throw new ListingsApiError(
+      json?.error?.code ?? 'internal_error',
+      json?.error?.message ?? GENERIC_MESSAGE,
+    )
+  }
+
+  return { data: json?.data ?? [], nextCursor: json?.nextCursor ?? null }
 }

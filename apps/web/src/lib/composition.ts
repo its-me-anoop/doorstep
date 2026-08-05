@@ -12,15 +12,16 @@
  * `auth` is the first group of services wired here (EstablishSession,
  * TerminateSession, GetCurrentUser — PRD §8.4). `listers` (BecomeOwner,
  * CreateAgency — PRD §6.5 LST-1) is the second, `listings`
- * (CreateListingDraft, UpdateListing, SubmitListing, ChangeListingStatus —
- * PRD §6.5 LST-2/4/5) the third — all three share the one
- * DrizzleListingRepository instance, since it implements both
- * ListingReader and ListingWriter. `geocoding` (SearchGeocode — PRD §8.6,
- * §10) is the fourth, wired to PostcodesIoGeocoder: the postcode fast
- * path only for M1 — see that adapter's doc comment for the Mapbox
- * fallback TODO(M2). `images` (RequestImageUpload, ProcessImage,
- * ReorderImages, SetImageKind, DeleteImage, ListListingImages — PRD §6.5
- * LST-3, §8.7) is the fifth, wired to FirebaseStorageAdapter and the new
+ * (CreateListingDraft, UpdateListing, SubmitListing, ChangeListingStatus,
+ * ListMyListings, DeleteListing — PRD §6.5 LST-2/4/5, M1-DESIGN-SPEC.md §4)
+ * the third — all three share the one DrizzleListingRepository instance,
+ * since it implements both ListingReader and ListingWriter. `geocoding`
+ * (SearchGeocode — PRD §8.6, §10) is the fourth, wired to
+ * PostcodesIoGeocoder: the postcode fast path only for M1 — see that
+ * adapter's doc comment for the Mapbox fallback TODO(M2). `images`
+ * (RequestImageUpload, ProcessImage, ReorderImages, SetImageKind,
+ * DeleteImage, ListListingImages, GetCoverBlurhashes — PRD §6.5 LST-3,
+ * §8.7) is the fifth, wired to FirebaseStorageAdapter and the new
  * DrizzlePropertyImageRepository; FirebaseStorageAdapter's constructor
  * reads no env var itself (see that class's doc comment) so this
  * function's own eager-construction-of-everything shape still never
@@ -57,6 +58,7 @@ import {
 import { SearchGeocode } from '@/services/geocoding'
 import {
   DeleteImage,
+  GetCoverBlurhashes,
   ListListingImages,
   ProcessImage,
   ReorderImages,
@@ -67,6 +69,7 @@ import { BecomeOwner, CreateAgency } from '@/services/listers'
 import {
   ChangeListingStatus,
   CreateListingDraft,
+  DeleteListing,
   GetListing,
   ListMyListings,
   SubmitListing,
@@ -91,6 +94,7 @@ export interface ListingServices {
   changeListingStatus: ChangeListingStatus
   getListing: GetListing
   listMyListings: ListMyListings
+  deleteListing: DeleteListing
 }
 
 export interface GeocodingServices {
@@ -104,6 +108,7 @@ export interface ImageServices {
   setImageKind: SetImageKind
   deleteImage: DeleteImage
   listListingImages: ListListingImages
+  getCoverBlurhashes: GetCoverBlurhashes
 }
 
 export interface Services {
@@ -158,6 +163,7 @@ export function createServices(): Services {
       ),
       getListing: new GetListing(listingRepository),
       listMyListings: new ListMyListings(listingRepository),
+      deleteListing: new DeleteListing(listingRepository, listingRepository),
     },
     geocoding: {
       searchGeocode: new SearchGeocode(geocoder),
@@ -195,6 +201,7 @@ export function createServices(): Services {
         propertyImageRepository,
         imageStorage,
       ),
+      getCoverBlurhashes: new GetCoverBlurhashes(propertyImageRepository),
     },
   }
 }

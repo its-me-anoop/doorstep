@@ -14,6 +14,7 @@ export { ReorderImages } from './reorder-images'
 export { SetImageKind } from './set-image-kind'
 export { DeleteImage } from './delete-image'
 export { ListListingImages } from './list-listing-images'
+export { GetCoverBlurhashes } from './get-cover-blurhashes'
 export { attachImageUrls } from './attach-image-urls'
 export type {
   PropertyImageWithUrls,

@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  changeListingStatus,
   createDraftListing,
+  deleteListing,
   geocodeSearch,
+  listMyListings,
   ListingsApiError,
   patchListing,
   submitListing,
@@ -77,6 +80,72 @@ describe('lib/listings-client', () => {
       },
     )
     expect(listing.status).toBe('pending_review')
+  })
+
+  it('changeListingStatus POSTs /api/v1/listings/{id}/status with the action', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        data: { listing: { id: 'listing-1', status: 'hidden' } },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const listing = await changeListingStatus('listing-1', 'hide')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/listings/listing-1/status',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'hide' }),
+      },
+    )
+    expect(listing.status).toBe('hidden')
+  })
+
+  it('deleteListing DELETEs /api/v1/listings/{id} with no body', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ data: { deleted: true } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await deleteListing('listing-1')
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/listings/listing-1', {
+      method: 'DELETE',
+    })
+  })
+
+  it('listMyListings GETs /api/v1/listings with no query params by default', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        data: [{ id: 'listing-1' }],
+        nextCursor: 'listing-1',
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const page = await listMyListings()
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/listings', undefined)
+    expect(page).toEqual({
+      data: [{ id: 'listing-1' }],
+      nextCursor: 'listing-1',
+    })
+  })
+
+  it('listMyListings GETs /api/v1/listings?cursor=&limit= when supplied', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ data: [], nextCursor: null }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await listMyListings({ cursor: 'listing-9', limit: 10 })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/listings?cursor=listing-9&limit=10',
+      undefined,
+    )
   })
 
   it('geocodeSearch GETs /api/v1/geocode?q= and returns the results array', async () => {

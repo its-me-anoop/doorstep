@@ -6,17 +6,19 @@ import { ListingNotFoundError } from '@/ports/listing-repository'
 import { ForbiddenError } from '@/services/authz'
 import {
   ListingChannelImmutableError,
+  ListingNotDeletableError,
   ListingNotEditableError,
 } from '@/services/listings'
 
 const getCurrentUser = { execute: vi.fn() }
 const getListing = { execute: vi.fn() }
 const updateListing = { execute: vi.fn() }
+const deleteListing = { execute: vi.fn() }
 
 vi.mock('@/lib/composition', () => ({
   createServices: () => ({
     auth: { getCurrentUser },
-    listings: { getListing, updateListing },
+    listings: { getListing, updateListing, deleteListing },
   }),
 }))
 
@@ -35,6 +37,15 @@ function patchRequest(body: unknown, cookie?: string): NextRequest {
     method: 'PATCH',
     headers,
     body: JSON.stringify(body),
+  })
+}
+
+function deleteRequest(cookie?: string): NextRequest {
+  const headers = new Headers()
+  if (cookie) headers.set('cookie', `${SESSION_COOKIE_NAME}=${cookie}`)
+  return new NextRequest('https://doorstep.test/api/v1/listings/listing-1', {
+    method: 'DELETE',
+    headers,
   })
 }
 
@@ -240,6 +251,110 @@ describe('PATCH /api/v1/listings/[id]', () => {
       patchRequest({ channel: 'sale', propertyType: 'flat' }, 'the-cookie'),
       ctx(),
     )
+
+    expect(response.status).toBe(500)
+    consoleError.mockRestore()
+  })
+})
+
+// DELETE /api/v1/listings/[id] — the M1-DESIGN-SPEC.md §4.3/§4.4 "Delete
+// draft" dashboard action, and this API's one M1 contract addition beyond
+// the PRD's original surface (services/listings/delete-listing.ts's doc
+// comment).
+describe('DELETE /api/v1/listings/[id]', () => {
+  beforeEach(() => {
+    getCurrentUser.execute.mockReset()
+    deleteListing.execute.mockReset()
+  })
+
+  it('401s with no session cookie', async () => {
+    const { DELETE } = await import('@/app/api/v1/listings/[id]/route')
+
+    const response = await DELETE(deleteRequest(), ctx())
+
+    expect(response.status).toBe(401)
+    expect(deleteListing.execute).not.toHaveBeenCalled()
+  })
+
+  it('deletes and returns {data: {deleted: true}}', async () => {
+    const actor = { id: 'user-1', role: 'owner' }
+    getCurrentUser.execute.mockResolvedValue({
+      user: actor,
+      identity: {},
+      reissue: false,
+    })
+    deleteListing.execute.mockResolvedValue(undefined)
+    const { DELETE } = await import('@/app/api/v1/listings/[id]/route')
+
+    const response = await DELETE(deleteRequest('the-cookie'), ctx('listing-1'))
+
+    expect(deleteListing.execute).toHaveBeenCalledWith(actor, 'listing-1')
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.data).toEqual({ deleted: true })
+  })
+
+  it('maps ListingNotFoundError to 404', async () => {
+    getCurrentUser.execute.mockResolvedValue({
+      user: { id: 'user-1', role: 'owner' },
+      identity: {},
+      reissue: false,
+    })
+    deleteListing.execute.mockRejectedValue(
+      new ListingNotFoundError('listing-1'),
+    )
+    const { DELETE } = await import('@/app/api/v1/listings/[id]/route')
+
+    const response = await DELETE(deleteRequest('the-cookie'), ctx())
+
+    expect(response.status).toBe(404)
+  })
+
+  it('maps ForbiddenError to 403', async () => {
+    getCurrentUser.execute.mockResolvedValue({
+      user: { id: 'user-1', role: 'user' },
+      identity: {},
+      reissue: false,
+    })
+    deleteListing.execute.mockRejectedValue(new ForbiddenError())
+    const { DELETE } = await import('@/app/api/v1/listings/[id]/route')
+
+    const response = await DELETE(deleteRequest('the-cookie'), ctx())
+
+    expect(response.status).toBe(403)
+  })
+
+  it('maps ListingNotDeletableError to 409', async () => {
+    getCurrentUser.execute.mockResolvedValue({
+      user: { id: 'user-1', role: 'owner' },
+      identity: {},
+      reissue: false,
+    })
+    deleteListing.execute.mockRejectedValue(
+      new ListingNotDeletableError('published'),
+    )
+    const { DELETE } = await import('@/app/api/v1/listings/[id]/route')
+
+    const response = await DELETE(deleteRequest('the-cookie'), ctx())
+
+    expect(response.status).toBe(409)
+    const body = await response.json()
+    expect(body.error.code).toBe('listing_not_deletable')
+  })
+
+  it('maps unknown errors to 500', async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined)
+    getCurrentUser.execute.mockResolvedValue({
+      user: { id: 'user-1', role: 'owner' },
+      identity: {},
+      reissue: false,
+    })
+    deleteListing.execute.mockRejectedValue(new Error('boom'))
+    const { DELETE } = await import('@/app/api/v1/listings/[id]/route')
+
+    const response = await DELETE(deleteRequest('the-cookie'), ctx())
 
     expect(response.status).toBe(500)
     consoleError.mockRestore()
