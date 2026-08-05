@@ -29,7 +29,7 @@ export function ForAgentsSection() {
             never guessing what&rsquo;s required.
           </p>
           <Button
-            render={<Link href="/sign-up?intent=lister" />}
+            render={<Link href="/onboarding" />}
             variant="secondary"
             className="mt-8 h-11 rounded-[var(--radius-md)] px-6"
           >

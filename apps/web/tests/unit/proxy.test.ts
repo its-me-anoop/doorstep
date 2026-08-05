@@ -50,18 +50,43 @@ describe('proxy', () => {
     expect(response.headers.get('location')).toBeNull()
   })
 
-  it('redirects /lister to /sign-in for role user', () => {
-    const cookie = fakeSessionCookie({ role: 'user', exp: futureExp })
-    const response = proxy(requestFor('/lister', cookie))
+  it('redirects /lister to /sign-in with no session cookie', () => {
+    const response = proxy(requestFor('/lister'))
     expect(response.status).toBe(307)
     expect(response.headers.get('location')).toBe(
       'https://doorstep.test/sign-in?next=%2Flister',
     )
   })
 
+  it('passes through /lister for role user — this tier is session-only; the (lister) layout redirects role user on to /onboarding', () => {
+    const cookie = fakeSessionCookie({ role: 'user', exp: futureExp })
+    const response = proxy(requestFor('/lister', cookie))
+    expect(response.headers.get('location')).toBeNull()
+  })
+
   it('passes through /lister for role agent', () => {
     const cookie = fakeSessionCookie({ role: 'agent', exp: futureExp })
     const response = proxy(requestFor('/lister', cookie))
+    expect(response.headers.get('location')).toBeNull()
+  })
+
+  it('redirects /onboarding to /sign-in with no session cookie', () => {
+    const response = proxy(requestFor('/onboarding'))
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe(
+      'https://doorstep.test/sign-in?next=%2Fonboarding',
+    )
+  })
+
+  it('passes through /onboarding for role user', () => {
+    const cookie = fakeSessionCookie({ role: 'user', exp: futureExp })
+    const response = proxy(requestFor('/onboarding', cookie))
+    expect(response.headers.get('location')).toBeNull()
+  })
+
+  it('passes through the nested /onboarding/agency for role user', () => {
+    const cookie = fakeSessionCookie({ role: 'user', exp: futureExp })
+    const response = proxy(requestFor('/onboarding/agency', cookie))
     expect(response.headers.get('location')).toBeNull()
   })
 

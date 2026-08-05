@@ -14,9 +14,24 @@ function claims(role: UserRole, exp = NOW_SECONDS + 60): GateClaims {
 }
 
 // PRD-driven route rules under test:
-//   /account requires any session
-//   /lister  requires role owner|agent|admin
-//   /admin   requires role admin
+//   /account   requires any live session, any role
+//   /onboarding requires any live session, any role (same as /account —
+//               the role-choice screen itself decides what an
+//               already-onboarded owner/agent/admin sees)
+//   /lister    requires any live session, any role — this proxy tier
+//               deliberately does NOT role-gate any more; the real
+//               owner|agent|admin check moved to the (lister) layout
+//               server component, which reads the DB-backed role via
+//               getSessionUser() instead of the cookie's unverified
+//               claim. See lib/decide-gate.ts's doc comment for why: a
+//               stale `role: user` claim survives until the client
+//               completes firebase-client.ts's refreshSessionAfterUpgrade
+//               dance, which requires a live Firebase user this proxy
+//               tier can never have mid-session.
+//   /admin     requires role admin — unchanged, still claims-gated here,
+//               since /admin has no equivalent "just signed up" race: an
+//               admin claim is granted out-of-band, never as the very
+//               next thing a user does after landing on the gated route.
 // Everything else is ungated (proxy.ts's matcher never even calls this
 // for other paths, but decideGate must still behave correctly if it did).
 describe('decideGate', () => {
@@ -63,21 +78,14 @@ describe('decideGate', () => {
     })
   })
 
-  it.each(['owner', 'agent', 'admin'] as const)(
-    'allows /lister for role %s',
+  it.each(['user', 'owner', 'agent', 'admin'] as const)(
+    'allows /lister for role %s — this tier only checks a live session exists, never the role',
     (role) => {
       expect(decideGate('/lister', claims(role), NOW_SECONDS)).toEqual({
         allow: true,
       })
     },
   )
-
-  it('redirects /lister to sign-in for role user', () => {
-    expect(decideGate('/lister', claims('user'), NOW_SECONDS)).toEqual({
-      allow: false,
-      redirectTo: '/sign-in?next=%2Flister',
-    })
-  })
 
   it('redirects /lister to sign-in with no session', () => {
     expect(decideGate('/lister', null, NOW_SECONDS)).toEqual({
@@ -86,9 +94,23 @@ describe('decideGate', () => {
     })
   })
 
+  it('redirects /lister to sign-in when the session has already expired', () => {
+    const expired = claims('user', NOW_SECONDS - 1)
+    expect(decideGate('/lister', expired, NOW_SECONDS)).toEqual({
+      allow: false,
+      redirectTo: '/sign-in?next=%2Flister',
+    })
+  })
+
   it('allows nested /lister/listings/new for an agent', () => {
     expect(
       decideGate('/lister/listings/new', claims('agent'), NOW_SECONDS),
+    ).toEqual({ allow: true })
+  })
+
+  it('allows nested /lister/listings/new for a role-user session too — the (lister) layout, not this tier, sends them on to /onboarding', () => {
+    expect(
+      decideGate('/lister/listings/new', claims('user'), NOW_SECONDS),
     ).toEqual({ allow: true })
   })
 
@@ -112,6 +134,36 @@ describe('decideGate', () => {
     expect(decideGate('/admin', null, NOW_SECONDS)).toEqual({
       allow: false,
       redirectTo: '/sign-in?next=%2Fadmin',
+    })
+  })
+
+  it.each(['user', 'owner', 'agent', 'admin'] as const)(
+    'allows /onboarding for any authenticated role, %s included',
+    (role) => {
+      expect(decideGate('/onboarding', claims(role), NOW_SECONDS)).toEqual({
+        allow: true,
+      })
+    },
+  )
+
+  it('allows the nested /onboarding/agency path for role user', () => {
+    expect(
+      decideGate('/onboarding/agency', claims('user'), NOW_SECONDS),
+    ).toEqual({ allow: true })
+  })
+
+  it('redirects /onboarding to sign-in with no session', () => {
+    expect(decideGate('/onboarding', null, NOW_SECONDS)).toEqual({
+      allow: false,
+      redirectTo: '/sign-in?next=%2Fonboarding',
+    })
+  })
+
+  it('redirects /onboarding to sign-in when the session has already expired', () => {
+    const expired = claims('user', NOW_SECONDS - 1)
+    expect(decideGate('/onboarding', expired, NOW_SECONDS)).toEqual({
+      allow: false,
+      redirectTo: '/sign-in?next=%2Fonboarding',
     })
   })
 
