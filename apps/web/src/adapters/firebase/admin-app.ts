@@ -22,12 +22,25 @@ function readEnv(name: string): string {
 }
 
 /**
- * `FIREBASE_PRIVATE_KEY` is stored with literal `\n` escapes (most
- * hosting env-var UIs, including Vercel's, don't preserve real newlines
- * in multi-line values) — unescape them back into a real PEM key.
+ * Normalises the common shapes `FIREBASE_PRIVATE_KEY` arrives in when
+ * pasted into an env-var UI: surrounding whitespace, wrapping single or
+ * double quotes (copied straight from the service-account JSON or a .env
+ * file), and literal `\n` escapes instead of real newlines. OpenSSL
+ * rejects a PEM with any of these intact ("DECODER routines::unsupported"),
+ * which surfaces as a hard-to-diagnose 500 in production.
  */
+export function normalizePrivateKey(raw: string): string {
+  let key = raw.trim()
+  const first = key[0]
+  if ((first === '"' || first === "'") && key.endsWith(first)) {
+    key = key.slice(1, -1)
+  }
+  key = key.replace(/\\n/g, '\n')
+  return key.endsWith('\n') ? key : key + '\n'
+}
+
 function readPrivateKey(): string {
-  return readEnv('FIREBASE_PRIVATE_KEY').replace(/\\n/g, '\n')
+  return normalizePrivateKey(readEnv('FIREBASE_PRIVATE_KEY'))
 }
 
 /** Returns the singleton Admin app, creating it on first use. Reuses an
