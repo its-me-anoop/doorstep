@@ -11,16 +11,6 @@ import type { App } from 'firebase-admin/app'
 
 let app: App | undefined
 
-function readEnv(name: string): string {
-  const value = process.env[name]
-  if (!value) {
-    throw new Error(
-      `${name} is not set. It is required to initialise the Firebase Admin app.`,
-    )
-  }
-  return value
-}
-
 /**
  * Normalises the common shapes `FIREBASE_PRIVATE_KEY` arrives in when
  * pasted into an env-var UI: surrounding whitespace, wrapping single or
@@ -53,8 +43,72 @@ export function normalizePrivateKey(raw: string): string {
   return key.endsWith('\n') ? key : key + '\n'
 }
 
-function readPrivateKey(): string {
-  return normalizePrivateKey(readEnv('FIREBASE_PRIVATE_KEY'))
+export interface ServiceAccountCredentials {
+  projectId: string
+  clientEmail: string
+  privateKey: string
+}
+
+/**
+ * Resolves Admin SDK credentials from the environment. Two supported
+ * shapes, in priority order:
+ *
+ * 1. FIREBASE_SERVICE_ACCOUNT_B64 — the entire service-account JSON,
+ *    base64-encoded to a single line. Preferred for hosted env-var UIs:
+ *    a single-line base64 blob survives any paste intact, whereas a raw
+ *    multi-line PEM routinely arrives with collapsed newlines, wrapping
+ *    quotes, or truncation that no amount of normalisation can repair.
+ *    Generate with: base64 -i service-account.json
+ * 2. FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY —
+ *    the individual values (canonical for local .env.local).
+ */
+export function resolveServiceAccount(
+  env: Record<string, string | undefined>,
+): ServiceAccountCredentials {
+  const b64 = env.FIREBASE_SERVICE_ACCOUNT_B64
+  if (b64) {
+    let parsed: {
+      project_id?: string
+      client_email?: string
+      private_key?: string
+    }
+    try {
+      parsed = JSON.parse(Buffer.from(b64.trim(), 'base64').toString('utf8'))
+    } catch {
+      throw new Error(
+        'FIREBASE_SERVICE_ACCOUNT_B64 is set but is not base64-encoded service-account JSON.',
+      )
+    }
+    if (!parsed.project_id || !parsed.client_email || !parsed.private_key) {
+      throw new Error(
+        'FIREBASE_SERVICE_ACCOUNT_B64 decoded, but the JSON is missing project_id, client_email or private_key.',
+      )
+    }
+    return {
+      projectId: parsed.project_id,
+      clientEmail: parsed.client_email,
+      privateKey: normalizePrivateKey(parsed.private_key),
+    }
+  }
+
+  return {
+    projectId: readEnvFrom(env, 'FIREBASE_PROJECT_ID'),
+    clientEmail: readEnvFrom(env, 'FIREBASE_CLIENT_EMAIL'),
+    privateKey: normalizePrivateKey(readEnvFrom(env, 'FIREBASE_PRIVATE_KEY')),
+  }
+}
+
+function readEnvFrom(
+  env: Record<string, string | undefined>,
+  name: string,
+): string {
+  const value = env[name]
+  if (!value) {
+    throw new Error(
+      `${name} is not set. It is required to initialise the Firebase Admin app.`,
+    )
+  }
+  return value
 }
 
 /** Returns the singleton Admin app, creating it on first use. Reuses an
@@ -79,12 +133,6 @@ export async function getAdminApp(): Promise<App> {
     return app
   }
 
-  app = initializeApp({
-    credential: cert({
-      projectId: readEnv('FIREBASE_PROJECT_ID'),
-      clientEmail: readEnv('FIREBASE_CLIENT_EMAIL'),
-      privateKey: readPrivateKey(),
-    }),
-  })
+  app = initializeApp({ credential: cert(resolveServiceAccount(process.env)) })
   return app
 }
