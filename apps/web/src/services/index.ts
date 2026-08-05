@@ -9,7 +9,8 @@
  *
  * auth/ (EstablishSession, TerminateSession, GetCurrentUser) and authz/
  * (canManageListing, requireRole) are the first use cases to land — see
- * PRD §8.4.
+ * PRD §8.4. listers/ (BecomeOwner, CreateAgency) is the lister-onboarding
+ * flow — PRD §6.5 LST-1.
  *
  * See PRD §8.5.
  */
@@ -30,3 +31,6 @@ export type {
 
 export { ForbiddenError, canManageListing, requireRole } from './authz'
 export type { Actor, ListingSubject } from './authz'
+
+export { BecomeOwner, CreateAgency } from './listers'
+export type { BecomeOwnerResult, CreateAgencyResult } from './listers'

@@ -10,7 +10,8 @@
  * this file.
  *
  * `auth` is the first group of services wired here (EstablishSession,
- * TerminateSession, GetCurrentUser — PRD §8.4). Later milestones add a
+ * TerminateSession, GetCurrentUser — PRD §8.4). `listers` (BecomeOwner,
+ * CreateAgency — PRD §6.5 LST-1) is the second. Later milestones add a
  * concrete adapter per port here as each remaining integration
  * (Meilisearch, Storage, Resend, Mapbox, Upstash) lands. See PRD §8.5.
  *
@@ -25,6 +26,7 @@
  */
 
 import { getDb } from '@/adapters/drizzle/client'
+import { DrizzleAgencyRepository } from '@/adapters/drizzle/repositories/agency-repository'
 import { DrizzleUserRepository } from '@/adapters/drizzle/repositories/user-repository'
 import { FirebaseAuthGateway } from '@/adapters/firebase'
 import { SystemClock } from '@/adapters/system-clock'
@@ -33,6 +35,7 @@ import {
   GetCurrentUser,
   TerminateSession,
 } from '@/services/auth'
+import { BecomeOwner, CreateAgency } from '@/services/listers'
 
 export interface AuthServices {
   establishSession: EstablishSession
@@ -40,12 +43,19 @@ export interface AuthServices {
   getCurrentUser: GetCurrentUser
 }
 
+export interface ListerServices {
+  becomeOwner: BecomeOwner
+  createAgency: CreateAgency
+}
+
 export interface Services {
   auth: AuthServices
+  listers: ListerServices
 }
 
 export function createServices(): Services {
   const userRepository = new DrizzleUserRepository(getDb())
+  const agencyRepository = new DrizzleAgencyRepository(getDb())
   const authGateway = new FirebaseAuthGateway()
   const clock = new SystemClock()
 
@@ -58,6 +68,14 @@ export function createServices(): Services {
       ),
       terminateSession: new TerminateSession(authGateway),
       getCurrentUser: new GetCurrentUser(authGateway, userRepository, clock),
+    },
+    listers: {
+      becomeOwner: new BecomeOwner(userRepository, authGateway),
+      createAgency: new CreateAgency(
+        agencyRepository,
+        userRepository,
+        authGateway,
+      ),
     },
   }
 }

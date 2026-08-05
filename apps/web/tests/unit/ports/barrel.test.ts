@@ -34,5 +34,12 @@ describe('ports barrel', () => {
       expect(services.auth.terminateSession).toBeDefined()
       expect(services.auth.getCurrentUser).toBeDefined()
     })
+
+    it('wires the listers service group', () => {
+      const services = createServices()
+
+      expect(services.listers.becomeOwner).toBeDefined()
+      expect(services.listers.createAgency).toBeDefined()
+    })
   })
 })

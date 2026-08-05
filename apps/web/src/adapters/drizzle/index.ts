@@ -15,6 +15,10 @@ export {
   mapRowToUser,
 } from './repositories/user-repository'
 export {
+  DrizzleAgencyRepository,
+  mapRowToAgency,
+} from './repositories/agency-repository'
+export {
   geographyPoint,
   citext,
   encodeGeographyPoint,

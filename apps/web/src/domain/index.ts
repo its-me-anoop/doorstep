@@ -36,6 +36,7 @@ export {
 export { getDisplayStatus } from './display-status'
 export { formatPrice } from './money'
 export type { FormatPriceInput } from './money'
+export { slugify } from './slug'
 
 export type { UserEntity } from './user'
 export type { PropertyEntity, GeoPoint } from './property'

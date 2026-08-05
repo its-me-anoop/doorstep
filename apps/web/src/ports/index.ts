@@ -25,6 +25,8 @@ export type {
   UserRepository,
 } from './user-repository'
 export { UniqueViolationError } from './user-repository'
+export type { Agency, AgencyRepository } from './agency-repository'
+export { AgencySlugConflictError } from './agency-repository'
 export type {
   GeoPoint,
   SearchDocument,

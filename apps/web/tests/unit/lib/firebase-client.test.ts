@@ -96,4 +96,52 @@ describe('lib/firebase-client', () => {
       /NEXT_PUBLIC_FIREBASE_API_KEY/,
     )
   })
+
+  // refreshSessionAfterUpgrade — the client-side half of PRD §8.4's
+  // "claims refresh on next token refresh, forced after upgrade". See its
+  // doc comment in lib/firebase-client.ts for the full reasoning.
+  describe('refreshSessionAfterUpgrade', () => {
+    it('forces a fresh ID token from the live Firebase user, re-POSTs it, then signs out', async () => {
+      const getIdToken = vi.fn().mockResolvedValue('fresh-post-upgrade-token')
+      getAuthMock.mockReturnValueOnce({ currentUser: { getIdToken } })
+      const { refreshSessionAfterUpgrade } =
+        await import('@/lib/firebase-client')
+
+      await refreshSessionAfterUpgrade()
+
+      expect(getIdToken).toHaveBeenCalledWith(true)
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/v1/auth/session',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'Content-Type': 'application/json',
+          }),
+          body: JSON.stringify({ idToken: 'fresh-post-upgrade-token' }),
+        }),
+      )
+      expect(signOutMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('throws without calling fetch when there is no live Firebase user to refresh', async () => {
+      getAuthMock.mockReturnValueOnce({ currentUser: null })
+      const { refreshSessionAfterUpgrade } =
+        await import('@/lib/firebase-client')
+
+      await expect(refreshSessionAfterUpgrade()).rejects.toThrow()
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(signOutMock).not.toHaveBeenCalled()
+    })
+
+    it('throws and does not sign out when the re-POST fails', async () => {
+      const getIdToken = vi.fn().mockResolvedValue('fresh-post-upgrade-token')
+      getAuthMock.mockReturnValueOnce({ currentUser: { getIdToken } })
+      fetchMock.mockResolvedValue(new Response(null, { status: 401 }))
+      const { refreshSessionAfterUpgrade } =
+        await import('@/lib/firebase-client')
+
+      await expect(refreshSessionAfterUpgrade()).rejects.toThrow()
+      expect(signOutMock).not.toHaveBeenCalled()
+    })
+  })
 })
