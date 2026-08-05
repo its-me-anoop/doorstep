@@ -14,10 +14,44 @@ Valley** with a handful of partner agencies, before widening coverage. Web
 first (Next.js), with a Flutter app as a phase-2 fast follow. Full product
 detail lives in [`docs/PRD.md`](docs/PRD.md).
 
-This repository is at an early milestone (**M0 — Foundation**, see
-[Delivery status](#delivery-status) below): the account/auth shell exists,
-but search, listings, images and email are not built yet. Don't go looking
-for them.
+This repository has completed **M1 — Listing CRUD + images** (see
+[Delivery status](#delivery-status) below): account/auth, lister onboarding,
+the create-listing wizard, the image pipeline and the my-listings dashboard
+are built and tested. Search, the map view, enquiries, admin and email are
+not built yet — don't go looking for them.
+
+## Delivery status
+
+Full milestone plan: [`docs/PRD.md` §13](docs/PRD.md#13-milestones-and-delivery-plan).
+
+- **M0 — Foundation.** Done. Repo, CI gates (typecheck, lint, unit,
+  integration, build, e2e), Vercel + Neon + Firebase projects (dev/preview/
+  prod), Drizzle schema and migrations (PostGIS + citext enabled), auth with
+  session cookies and roles, design tokens and app shell, seed script.
+- **M1 — Listing CRUD + images.** Done. An agent or a private owner can
+  onboard, build a complete listing with photos, and submit it for approval:
+  - **Lister onboarding** — "I'm a private owner" (instant `owner` role) or
+    "I'm an agent" (creates an unverified agency, grants `agent`). `/lister`
+    and `/onboarding` are gated on session presence only in `src/proxy.ts`;
+    the real owner/agent/admin role check is DB-backed, enforced in the
+    `(lister)` route-group layout against `users.role`, never the session
+    cookie's (UX-only) claim.
+  - **Create-listing wizard** — six steps (channel & type, address, details,
+    description & features, photos, review), shared Zod schemas validated
+    client- and server-side, silent debounced autosave with a resumable
+    draft.
+  - **Image pipeline** — signed direct-to-Firebase-Storage uploads, sharp-
+    rendered WebP/AVIF variants at 400/800/1600w, EXIF (including GPS)
+    stripped on processing, blurhash placeholders, long-cache immutable
+    public URLs via Firebase's download-token scheme; originals stay
+    private.
+  - **My-listings dashboard** — status filter, one-click status transitions
+    (Sold STC / Let Agreed / Sold / Let / Hide / Unhide / Back on market)
+    with optimistic UI and a 6-second undo, plus draft deletion.
+  - **Postcode fast-path** — the wizard's address step resolves full and
+    partial UK postcodes via postcodes.io; free-text place search (Mapbox)
+    is still M2.
+- **M2 (search) through M6 (hardening + launch)** — not started.
 
 ## Stack
 
@@ -30,11 +64,11 @@ for them.
 | Database | Neon Postgres + PostGIS (source of truth) |
 | ORM / migrations | Drizzle ORM + drizzle-kit |
 | Search | Meilisearch Cloud, EU region (scaffolded from M0, wired from M2) |
-| File storage | Firebase Storage, behind an `ImageStorage` port (wired from M1) |
-| Maps + geocoding | Mapbox GL JS + Geocoding, postcodes.io for UK postcodes (from M2/M3) |
+| File storage | Firebase Storage, behind an `ImageStorage` port (wired M1: signed uploads, sharp variants, EXIF strip, blurhash, download-token URLs) |
+| Maps + geocoding | postcodes.io UK postcode fast-path (wired M1); Mapbox GL JS + Geocoding for free-text place search and the map view (from M2/M3) |
 | Email | Resend + React Email (wired from M4, or earlier for auth emails) |
 | Rate limiting | Upstash Redis (wired from M4) |
-| Testing | Vitest 4 (node + jsdom projects) + Playwright + axe |
+| Testing | Vitest 4 (node + integration + jsdom projects) + Playwright + axe |
 
 Full rationale for each choice: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 and the ADRs in [`docs/adr/`](docs/adr/).
@@ -53,7 +87,7 @@ doorstep/
         services/          Use cases, orchestrating ports
         ports/             Interfaces domain/services depend on
         adapters/          Concrete implementations of ports (drizzle/, firebase/,
-                            meilisearch/, resend/, mapbox/, upstash/)
+                            postcodesio/, meilisearch/, resend/, mapbox/, upstash/)
         components/        UI primitives + feature components
         lib/               Composition root, route-gating logic, shared Zod schemas
       tests/
@@ -109,7 +143,7 @@ first — `pnpm dev` will start without them, but sign-up/sign-in and
 Copy [`.env.example`](.env.example) to `.env.local` and fill it in. Every
 variable the app reads today is listed below; nothing here is invented —
 Mapbox, Meilisearch, Resend and Upstash have no env vars yet because
-nothing calls them until M1–M4 (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#8-what-m0-deliberately-stubs)).
+nothing calls them until M2–M4 (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#8-what-m0-deliberately-stubs)).
 
 | Variable | Required | Where it comes from | Notes |
 | --- | --- | --- | --- |
@@ -122,6 +156,8 @@ nothing calls them until M1–M4 (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE
 | `FIREBASE_PROJECT_ID` | Yes | Firebase console → Project settings → Service accounts → Generate new private key | Server only — part of the Admin SDK service account JSON |
 | `FIREBASE_CLIENT_EMAIL` | Yes | Same service account JSON | Server only, secret |
 | `FIREBASE_PRIVATE_KEY` | Yes | Same service account JSON | Server only, secret. Keep the literal `\n` escapes from the JSON — most hosting env-var UIs (including Vercel's) don't preserve real newlines. `src/adapters/firebase/admin-app.ts` unescapes it back into a real PEM |
+| `FIREBASE_STORAGE_BUCKET` | Yes (for image features) | Firebase console → Storage → bucket name, e.g. `my-project.firebasestorage.app` | Not secret — the bucket name, not a credential (`src/adapters/firebase/firebase-storage-adapter.ts`, PRD §8.7). Required for the image pipeline (`POST /api/v1/listings/{id}/images` and friends); `createServices()` throws a clear error naming this var if it's unset |
+| `TEST_FIREBASE_STORAGE_BUCKET` | No | Same as above, a bucket you're okay writing disposable test objects to | Set only to run `tests/integration/image-storage-firebase.contract.test.ts` against a real bucket (PRD §8.7's storage-adapter contract-test exit criterion) — unset in CI, where it skips cleanly; the in-memory fake's contract run (`image-storage-inmemory.contract.test.ts`) still enforces the contract there |
 | `SESSION_COOKIE_NAME` | No | You choose | Defaults to `__session` (`src/lib/session-cookie-name.ts`) |
 
 Never commit real values for any of the secret-marked variables above — only
@@ -220,23 +256,34 @@ Two scripts aren't proxied at the root and need `pnpm --filter web run <name>`:
 
 ## Testing
 
-Vitest 4 runs two projects from one config
+Vitest 4 runs three projects from one config
 ([`apps/web/vitest.config.mts`](apps/web/vitest.config.mts)): `node` for
-domain/services/adapters, `dom` (jsdom) for anything that renders a
-component.
+domain/services/adapters (`tests/unit`, excluding components), `integration`
+for `tests/integration`, and `dom` (jsdom) for anything under
+`tests/unit/components` that renders a component.
 
-- **Unit** — `pnpm test:unit`. No external services. 249+ tests today
+- **Unit** — `pnpm test:unit`. No external services. 1,063+ tests today
   covering domain, services, adapters (with fakes/mocks) and components.
-- **Integration** — `pnpm test:integration`. Needs `TEST_DATABASE_URL`
-  pointing at a real Postgres+PostGIS instance; skips cleanly when unset —
-  there's no Docker and no local database on a typical dev machine, so
-  this only runs for real in CI, against a `postgis/postgis:16-3.4`
-  service container.
+- **Integration** — `pnpm test:integration`. The Drizzle-backed suites need
+  `TEST_DATABASE_URL` pointing at a real Postgres+PostGIS instance and skip
+  cleanly when unset — there's no Docker and no local database on a typical
+  dev machine, so those only run for real in CI, against a
+  `postgis/postgis:16-3.4` service container. The `ImageStorage` contract
+  suite (PRD §8.7) is split across two files instead: `image-storage-
+  inmemory.contract.test.ts` runs everywhere (a fake, no live service
+  needed), and `image-storage-firebase.contract.test.ts` runs only when
+  `TEST_FIREBASE_STORAGE_BUCKET` is set — CI has no such secret, so that
+  half only ever runs locally, deliberately.
 - **e2e** — `pnpm test:e2e` (Playwright + axe). With `BASE_URL` unset, it
   builds and starts the app itself against a placeholder environment (no
   real Firebase/database needed). Set `BASE_URL` to point Playwright at an
   already-running app (a preview deployment, for example) instead of
-  spawning its own server.
+  spawning its own server. `tests/e2e/m1.full-journey.spec.ts` is a further-
+  gated exception: set `E2E_TEST_EMAIL` / `E2E_TEST_PASSWORD` to an active
+  account on the target Firebase project, and `BASE_URL` to an environment
+  wired to real Postgres and Storage, to run the full owner journey (sign
+  in, onboard, wizard, a real photo upload, submit) end to end. Skipped
+  everywhere else, including CI.
 
 **Unit, integration and e2e all run to completion in CI** on every push and
 pull request to `main` — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml),
@@ -250,7 +297,8 @@ idempotent. All six jobs must pass before a PR can merge.
 - [`docs/PRD.md`](docs/PRD.md) — product requirements (source of truth for
   scope, milestones, and non-functional requirements)
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how the code is
-  organised, the dependency rule, auth flow, data layer, what M0 stubs
+  organised, the dependency rule, auth flow, data layer, the M1 onboarding/
+  listing/image build, and what's still stubbed
 - [`docs/adr/`](docs/adr/) — architecture decision records
 - [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) — workflow, TDD
   expectations, how to add an adapter, definition of done
