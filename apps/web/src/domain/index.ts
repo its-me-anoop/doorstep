@@ -25,7 +25,7 @@ export type {
   AlertFrequency,
   OutboxOp,
 } from './enums'
-export { USER_ROLES, isUserRole } from './enums'
+export { USER_ROLES, isUserRole, IMAGE_KINDS } from './enums'
 
 export {
   InvalidTransitionError,
@@ -42,6 +42,18 @@ export type {
   GenerateListingTitleInput,
   GenerateListingSlugInput,
 } from './listing-copy'
+export {
+  MAX_IMAGES_PER_LISTING,
+  MAX_IMAGE_BYTES,
+  ALLOWED_IMAGE_CONTENT_TYPES,
+  isAllowedImageContentType,
+} from './image-upload-policy'
+export type { AllowedImageContentType } from './image-upload-policy'
+export { originalImagePath, variantImagePath } from './image-storage-path'
+export type { ImageVariantFormat } from './image-storage-path'
+export { planImageVariants } from './image-variant-plan'
+export type { ImageVariantPlanEntry } from './image-variant-plan'
+export { computeBlurhash } from './blurhash'
 
 export type { UserEntity } from './user'
 export type { PropertyEntity, GeoPoint } from './property'

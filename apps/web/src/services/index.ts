@@ -13,7 +13,9 @@
  * flow — PRD §6.5 LST-1. listings/ (CreateListingDraft, UpdateListing,
  * SubmitListing, ChangeListingStatus) is the create-listing wizard's data
  * side — PRD §6.5 LST-2, LST-4, LST-5. geocoding/ (SearchGeocode) is the
- * public postcode-suggestions lookup — PRD §8.6, §10.
+ * public postcode-suggestions lookup — PRD §8.6, §10. images/
+ * (RequestImageUpload, ProcessImage, ReorderImages, SetImageKind,
+ * DeleteImage) is the wizard's media step — PRD §6.5 LST-3, §8.7.
  *
  * See PRD §8.5.
  */
@@ -54,3 +56,14 @@ export {
 export type { ListingStatusAction } from './listings'
 
 export { SearchGeocode } from './geocoding'
+
+export {
+  RequestImageUpload,
+  ProcessImage,
+  ReorderImages,
+  SetImageKind,
+  DeleteImage,
+  TooManyImagesError,
+  OriginalImageNotFoundError,
+} from './images'
+export type { RequestImageUploadResult } from './images'

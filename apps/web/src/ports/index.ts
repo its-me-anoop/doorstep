@@ -24,6 +24,13 @@ export type {
 } from './listing-repository'
 export { ListingNotFoundError } from './listing-repository'
 export type {
+  PropertyImage,
+  NewPropertyImage,
+  PropertyImageReader,
+  PropertyImageWriter,
+} from './property-image-repository'
+export { PropertyImageNotFoundError } from './property-image-repository'
+export type {
   User,
   UserRole,
   UserStatus,
@@ -39,7 +46,11 @@ export type {
   SearchResult,
   SearchIndex,
 } from './search-index'
-export type { SignedUploadUrl, ImageStorage } from './image-storage'
+export type {
+  SignedUploadUrl,
+  CreateSignedUploadUrlOptions,
+  ImageStorage,
+} from './image-storage'
 export type { EmailMessage, Mailer } from './mailer'
 export type { GeocodeResult, Geocoder } from './geocoder'
 export type { RateLimitResult, RateLimiter } from './rate-limiter'

@@ -23,6 +23,10 @@ export {
   mapRowToListing,
 } from './repositories/listing-repository'
 export {
+  DrizzlePropertyImageRepository,
+  mapRowToPropertyImage,
+} from './repositories/property-image-repository'
+export {
   geographyPoint,
   citext,
   encodeGeographyPoint,

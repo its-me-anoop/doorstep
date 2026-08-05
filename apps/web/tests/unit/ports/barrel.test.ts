@@ -58,5 +58,15 @@ describe('ports barrel', () => {
 
       expect(services.geocoding.searchGeocode).toBeDefined()
     })
+
+    it('wires the images service group', () => {
+      const services = createServices()
+
+      expect(services.images.requestImageUpload).toBeDefined()
+      expect(services.images.processImage).toBeDefined()
+      expect(services.images.reorderImages).toBeDefined()
+      expect(services.images.setImageKind).toBeDefined()
+      expect(services.images.deleteImage).toBeDefined()
+    })
   })
 })

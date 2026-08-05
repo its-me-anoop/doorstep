@@ -10,9 +10,16 @@
  * Completeness is judged against lib/validation/listing.ts's
  * submitListingSchema, run here (not at the route) because the input is
  * the *stored* listing, not a request body — PRD §9.2's full field list,
- * channel-conditional (tenure for sale, EPC rating for rent).
- * pending_review is never publicly visible, so — unlike a published edit
- * — this transition writes no outbox row.
+ * channel-conditional (tenure for sale, EPC rating for rent). A second,
+ * separate completeness check follows: PHOTO_MINIMUM images uploaded (PRD
+ * §6.5 LST-3 — "published-bound listings need a cover", position 0). It
+ * counts every image regardless of kind (photo/floorplan/epc) rather than
+ * filtering to kind='photo' — ports/property-image-repository.ts has no
+ * kind-filtered count method, and PRD §9.2 only requires *a* cover image
+ * at position 0, not that it specifically be tagged 'photo'; adding a
+ * narrower port method for a distinction the PRD doesn't ask for would be
+ * scope creep for M1. pending_review is never publicly visible, so —
+ * unlike a published edit — this transition writes no outbox row.
  */
 
 import { assertTransition } from '@/domain/property-status-machine'
@@ -24,25 +31,21 @@ import type {
 } from '@/ports/listing-repository'
 import { ListingNotFoundError } from '@/ports/listing-repository'
 import type { Clock } from '@/ports/clock'
+import type { PropertyImageReader } from '@/ports/property-image-repository'
 import type { User } from '@/ports/user-repository'
 import { canManageListing, ForbiddenError } from '@/services/authz/policies'
 
 import { AccountSuspendedError } from '../auth/errors'
 import { ListingIncompleteError } from './errors'
 
-/**
- * Minimum photo count required before submission (PRD §6.5 LST-3). There
- * is no PropertyImageRepository yet — the image pipeline is a later M1
- * commit — so there is nothing to count rows against, hence 0 (no-op).
- * TODO(M1-images): once a PropertyImageRepository exists, inject it here,
- * count rows for the listing, and raise this above 0.
- */
-export const PHOTO_MINIMUM = 0
+/** Minimum image count required before submission (PRD §6.5 LST-3). */
+export const PHOTO_MINIMUM = 1
 
 export class SubmitListing {
   constructor(
     private readonly listingReader: ListingReader,
     private readonly listingWriter: ListingWriter,
+    private readonly propertyImageReader: PropertyImageReader,
     private readonly clock: Clock,
   ) {}
 
@@ -68,6 +71,16 @@ export class SubmitListing {
           message: issue.message,
         })),
       )
+    }
+
+    const photoCount = await this.propertyImageReader.countByProperty(listingId)
+    if (photoCount < PHOTO_MINIMUM) {
+      throw new ListingIncompleteError([
+        {
+          path: 'images',
+          message: `Add at least ${PHOTO_MINIMUM} photo before submitting.`,
+        },
+      ])
     }
 
     return this.listingWriter.transitionWithOutbox(

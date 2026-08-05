@@ -18,9 +18,15 @@
  * ListingReader and ListingWriter. `geocoding` (SearchGeocode — PRD §8.6,
  * §10) is the fourth, wired to PostcodesIoGeocoder: the postcode fast
  * path only for M1 — see that adapter's doc comment for the Mapbox
- * fallback TODO(M2). Later milestones add a concrete adapter per port
- * here as each remaining integration (Meilisearch, Storage, Resend,
- * Mapbox, Upstash) lands. See PRD §8.5.
+ * fallback TODO(M2). `images` (RequestImageUpload, ProcessImage,
+ * ReorderImages, SetImageKind, DeleteImage — PRD §6.5 LST-3, §8.7) is the
+ * fifth, wired to FirebaseStorageAdapter and the new
+ * DrizzlePropertyImageRepository; FirebaseStorageAdapter's constructor
+ * reads no env var itself (see that class's doc comment) so this
+ * function's own eager-construction-of-everything shape still never
+ * throws for a service group a given request doesn't touch. Later
+ * milestones add a concrete adapter per port here as each remaining
+ * integration (Meilisearch, Resend, Mapbox, Upstash) lands. See PRD §8.5.
  *
  * Note: this constructs a DrizzleUserRepository, which calls
  * adapters/drizzle/client.ts's getDb() — that throws if DATABASE_URL
@@ -35,8 +41,12 @@
 import { getDb } from '@/adapters/drizzle/client'
 import { DrizzleAgencyRepository } from '@/adapters/drizzle/repositories/agency-repository'
 import { DrizzleListingRepository } from '@/adapters/drizzle/repositories/listing-repository'
+import { DrizzlePropertyImageRepository } from '@/adapters/drizzle/repositories/property-image-repository'
 import { DrizzleUserRepository } from '@/adapters/drizzle/repositories/user-repository'
-import { FirebaseAuthGateway } from '@/adapters/firebase'
+import {
+  FirebaseAuthGateway,
+  FirebaseStorageAdapter,
+} from '@/adapters/firebase'
 import { PostcodesIoGeocoder } from '@/adapters/postcodesio'
 import { SystemClock } from '@/adapters/system-clock'
 import {
@@ -45,6 +55,13 @@ import {
   TerminateSession,
 } from '@/services/auth'
 import { SearchGeocode } from '@/services/geocoding'
+import {
+  DeleteImage,
+  ProcessImage,
+  ReorderImages,
+  RequestImageUpload,
+  SetImageKind,
+} from '@/services/images'
 import { BecomeOwner, CreateAgency } from '@/services/listers'
 import {
   ChangeListingStatus,
@@ -79,20 +96,31 @@ export interface GeocodingServices {
   searchGeocode: SearchGeocode
 }
 
+export interface ImageServices {
+  requestImageUpload: RequestImageUpload
+  processImage: ProcessImage
+  reorderImages: ReorderImages
+  setImageKind: SetImageKind
+  deleteImage: DeleteImage
+}
+
 export interface Services {
   auth: AuthServices
   listers: ListerServices
   listings: ListingServices
   geocoding: GeocodingServices
+  images: ImageServices
 }
 
 export function createServices(): Services {
   const userRepository = new DrizzleUserRepository(getDb())
   const agencyRepository = new DrizzleAgencyRepository(getDb())
   const listingRepository = new DrizzleListingRepository(getDb())
+  const propertyImageRepository = new DrizzlePropertyImageRepository(getDb())
   const authGateway = new FirebaseAuthGateway()
   const clock = new SystemClock()
   const geocoder = new PostcodesIoGeocoder()
+  const imageStorage = new FirebaseStorageAdapter()
 
   return {
     auth: {
@@ -118,6 +146,7 @@ export function createServices(): Services {
       submitListing: new SubmitListing(
         listingRepository,
         listingRepository,
+        propertyImageRepository,
         clock,
       ),
       changeListingStatus: new ChangeListingStatus(
@@ -130,6 +159,35 @@ export function createServices(): Services {
     },
     geocoding: {
       searchGeocode: new SearchGeocode(geocoder),
+    },
+    images: {
+      requestImageUpload: new RequestImageUpload(
+        listingRepository,
+        propertyImageRepository,
+        imageStorage,
+      ),
+      processImage: new ProcessImage(
+        listingRepository,
+        propertyImageRepository,
+        propertyImageRepository,
+        imageStorage,
+      ),
+      reorderImages: new ReorderImages(
+        listingRepository,
+        propertyImageRepository,
+        propertyImageRepository,
+      ),
+      setImageKind: new SetImageKind(
+        listingRepository,
+        propertyImageRepository,
+        propertyImageRepository,
+      ),
+      deleteImage: new DeleteImage(
+        listingRepository,
+        propertyImageRepository,
+        propertyImageRepository,
+        imageStorage,
+      ),
     },
   }
 }

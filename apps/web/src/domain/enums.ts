@@ -77,6 +77,13 @@ export type EnquiryStatus = 'new' | 'contacted' | 'closed'
 /** property_images.kind */
 export type ImageKind = 'photo' | 'floorplan' | 'epc'
 
+/**
+ * Runtime companion to `ImageKind`, mirroring USER_ROLES above — needed by
+ * lib/validation/image.ts to build a zod enum without duplicating the
+ * literal list (PRD §6.5 LST-3: "tag an image as floorplan or EPC").
+ */
+export const IMAGE_KINDS: readonly ImageKind[] = ['photo', 'floorplan', 'epc']
+
 /** saved_searches.alert_frequency */
 export type AlertFrequency = 'none' | 'daily' | 'instant'
 
