@@ -38,6 +38,56 @@
  * `variantImagePath` scheme) — the only paths `publicUrl()` is ever
  * called for. Originals (`original/` paths) are never served publicly
  * (PRD §8.7 point 3) and get no such header.
+ *
+ * Storage emulator support (dev/CI without a live bucket — see
+ * firebase.json/storage.rules at the repo root): FIREBASE_STORAGE_EMULATOR_HOST
+ * (or STORAGE_EMULATOR_HOST) is the same pair firebase-admin's own Storage
+ * service reads — see the `Storage` class in firebase-admin/lib/storage/
+ * storage.js, which rewrites FIREBASE_STORAGE_EMULATOR_HOST into
+ * STORAGE_EMULATOR_HOST (adding an `http://` prefix) the first time a
+ * Storage instance is constructed, purely as a side effect of that one
+ * env var being set. From there @google-cloud/storage's own constructor
+ * (storage.js) picks up STORAGE_EMULATOR_HOST directly. Net effect,
+ * verified empirically against firebase-tools 15.9.0's storage emulator:
+ * `put()`/`get()`/`exists()`/`delete()` below need ZERO code changes to
+ * redirect to the emulator — the Admin SDK's bucket() calls they're built
+ * on already honor it.
+ *
+ * The other two methods are not that simple, and both needed a real
+ * emulator running locally to find out why (rather than assuming):
+ *
+ *  - `createSignedUploadUrl()`: a V4 signed URL still *generates*
+ *    correctly offline (the RSA signature is computed locally from the
+ *    service-account private key — no network call), and its host
+ *    correctly points at the emulator (@google-cloud/storage's signer
+ *    builds the URL from `storage.apiEndpoint`, which is the emulator
+ *    host once STORAGE_EMULATOR_HOST is set) — but a PUT to that URL
+ *    gets back `501 Not Implemented`. The storage emulator does not
+ *    implement the GCS XML API's signed-PUT-to-object endpoint at all
+ *    (only a GET at that path shape, for downloads). What it *does*
+ *    implement is its own Firebase-specific `/v0/b/{bucket}/o/{object}`
+ *    REST surface, whose PUT handler (no `x-goog-upload-protocol`
+ *    header, i.e. a plain single-request body) accepts raw bytes and
+ *    finalises the object in one call — exactly the "one PUT, whole file
+ *    in the body" shape `lib/images-client.ts`'s `uploadOriginalBytes`
+ *    already sends. So under emulation this method skips real V4 signing
+ *    entirely and returns that `/v0` URL instead (`buildEmulatorUploadUrl`
+ *    below) — there is nothing to sign against, since the emulator does
+ *    not check the signature anyway.
+ *  - `publicUrl()`: the production download-token URL
+ *    (`buildDownloadUrl`) is hardcoded to `firebasestorage.googleapis.com`
+ *    — a real, public Google endpoint that doesn't exist for emulated
+ *    data. The emulator serves the identical `/v0/b/{bucket}/o/{path}?
+ *    alt=media&token={token}` shape (confirmed empirically — same path,
+ *    same query params, same 200-with-bytes response) from its own
+ *    host:port instead, so `buildDownloadUrl` takes an optional base URL
+ *    parameter and this method passes the emulator's when one is
+ *    configured.
+ *
+ * Both branches are pure URL-string construction with no adapter method
+ * call that isn't already unit-tested elsewhere in this file's test
+ * companion — see `buildEmulatorUploadUrl` and `buildDownloadUrl`'s
+ * `baseUrl` parameter.
  */
 
 import { randomUUID } from 'node:crypto'
@@ -81,13 +131,50 @@ export function isVariantPath(path: string): boolean {
 /** Builds the same download-URL shape firebase-admin/storage's own
  * `getDownloadURL()` helper produces for a bucket, object path and
  * download token. Pure and exported so it's unit-testable without a live
- * bucket. */
+ * bucket. `baseUrl` defaults to the real Firebase Storage endpoint;
+ * `publicUrl()` below passes the Storage emulator's instead when one is
+ * configured — same path/query shape, different host (see this file's
+ * header comment). */
 export function buildDownloadUrl(
   bucket: string,
   path: string,
   token: string,
+  baseUrl: string = DOWNLOAD_URL_ENDPOINT,
 ): string {
-  return `${DOWNLOAD_URL_ENDPOINT}/b/${bucket}/o/${encodeURIComponent(path)}?alt=media&token=${token}`
+  return `${baseUrl}/b/${bucket}/o/${encodeURIComponent(path)}?alt=media&token=${token}`
+}
+
+/** Reads the Storage emulator host (bare `host:port`, no scheme) from
+ * either FIREBASE_STORAGE_EMULATOR_HOST or STORAGE_EMULATOR_HOST — the
+ * same two vars, same precedence (STORAGE_EMULATOR_HOST wins if both are
+ * set), that firebase-admin's own Storage service reads (see this file's
+ * header comment). Strips an `http(s)://` prefix if present, since
+ * STORAGE_EMULATOR_HOST may already carry one (firebase-admin adds one
+ * when rewriting from FIREBASE_STORAGE_EMULATOR_HOST) but this adapter's
+ * emulator-branch URL builders below need a bare host to prefix with
+ * their own `http://`. Pure and exported so it's unit-testable without a
+ * live emulator. */
+export function resolveStorageEmulatorHost(
+  env: Record<string, string | undefined>,
+): string | undefined {
+  const raw = env.STORAGE_EMULATOR_HOST ?? env.FIREBASE_STORAGE_EMULATOR_HOST
+  return raw?.replace(/^https?:\/\//, '')
+}
+
+/** Builds the Storage emulator's one-shot upload URL for `path` — the
+ * `/v0/b/{bucket}/o/{object}` REST endpoint's PUT handler, which (absent
+ * an `x-goog-upload-protocol` header) accepts the whole file as a single
+ * request body and finalises the object immediately. This is what
+ * `createSignedUploadUrl()` returns instead of a real V4 signed URL when
+ * an emulator host is configured — see this file's header comment for
+ * why a real signed URL doesn't work against the emulator. Pure and
+ * exported so it's unit-testable without a live emulator. */
+export function buildEmulatorUploadUrl(
+  emulatorHost: string,
+  bucket: string,
+  path: string,
+): string {
+  return `http://${emulatorHost}/v0/b/${bucket}/o/${encodeURIComponent(path)}`
 }
 
 async function adminBucket(bucketName: string) {
@@ -118,6 +205,23 @@ export class FirebaseStorageAdapter implements ImageStorage {
     path: string,
     options: CreateSignedUploadUrlOptions,
   ): Promise<SignedUploadUrl> {
+    const emulatorHost = resolveStorageEmulatorHost(this.env)
+    if (emulatorHost) {
+      // No real V4 signing under emulation — see this file's header
+      // comment for why a real signed URL 501s against the emulator, and
+      // why its own /v0 upload endpoint is the correct substitute. No
+      // bucket() call needed either: this is pure URL construction, not
+      // a network call.
+      return {
+        url: buildEmulatorUploadUrl(
+          emulatorHost,
+          resolveStorageBucket(this.env),
+          path,
+        ),
+        headers: { 'Content-Type': options.contentType },
+      }
+    }
+
     const bucket = await this.bucket()
     const sizeRangeHeader = `0,${options.maxBytes}`
 
@@ -190,6 +294,14 @@ export class FirebaseStorageAdapter implements ImageStorage {
       })
     }
 
-    return buildDownloadUrl(resolveStorageBucket(this.env), path, token)
+    const emulatorHost = resolveStorageEmulatorHost(this.env)
+    const baseUrl = emulatorHost ? `http://${emulatorHost}/v0` : undefined
+
+    return buildDownloadUrl(
+      resolveStorageBucket(this.env),
+      path,
+      token,
+      baseUrl,
+    )
   }
 }

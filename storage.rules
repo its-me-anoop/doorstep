@@ -1,0 +1,26 @@
+// storage.rules — Firebase Storage EMULATOR rules only. NEVER deployed.
+//
+// This project has no live Storage bucket to deploy to yet (see the M1
+// journey doc: the dev Firebase project's billing account is closed and
+// bucket creation is blocked). This file exists purely so
+// `firebase emulators:start --only storage` has rules to load locally
+// and in CI.
+//
+// These rules are deliberately wide open (`allow read, write: if true`)
+// because the emulator is the ONLY place they ever run — there is no
+// `firebase deploy --only storage` in this repo's tooling or CI, and the
+// app itself never relies on Storage Security Rules for access control
+// in the first place: every read/write goes through this app's own
+// server-side authorization (services/images/*, services/authz/policies
+// — PRD §7.4) via the Admin SDK (full-bucket access) or a V4 signed URL
+// scoped to one object (adapters/firebase/firebase-storage-adapter.ts).
+// Rules this permissive would be a real vulnerability on a deployed
+// bucket; they are inert here.
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if true;
+    }
+  }
+}

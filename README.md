@@ -158,6 +158,7 @@ nothing calls them until M2–M4 (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE
 | `FIREBASE_PRIVATE_KEY` | Yes | Same service account JSON | Server only, secret. Keep the literal `\n` escapes from the JSON — most hosting env-var UIs (including Vercel's) don't preserve real newlines. `src/adapters/firebase/admin-app.ts` unescapes it back into a real PEM |
 | `FIREBASE_STORAGE_BUCKET` | Yes (for image features) | Firebase console → Storage → bucket name, e.g. `my-project.firebasestorage.app` | Not secret — the bucket name, not a credential (`src/adapters/firebase/firebase-storage-adapter.ts`, PRD §8.7). Required for the image pipeline (`POST /api/v1/listings/{id}/images` and friends); `createServices()` throws a clear error naming this var if it's unset |
 | `TEST_FIREBASE_STORAGE_BUCKET` | No | Same as above, a bucket you're okay writing disposable test objects to | Set only to run `tests/integration/image-storage-firebase.contract.test.ts` against a real bucket (PRD §8.7's storage-adapter contract-test exit criterion) — unset in CI, where it skips cleanly; the in-memory fake's contract run (`image-storage-inmemory.contract.test.ts`) still enforces the contract there |
+| `FIREBASE_STORAGE_EMULATOR_HOST` | No | You choose, e.g. `127.0.0.1:9199` | Points the real `FirebaseStorageAdapter` at a local `firebase emulators:start --only storage` instead of a live bucket — see [Firebase Storage emulator (no live bucket needed)](#firebase-storage-emulator-no-live-bucket-needed) below. Leave unset to use a real bucket |
 | `SESSION_COOKIE_NAME` | No | You choose | Defaults to `__session` (`src/lib/session-cookie-name.ts`) |
 
 Never commit real values for any of the secret-marked variables above — only
@@ -185,6 +186,45 @@ shared credentials (PRD §7.4).
    `FIREBASE_PROJECT_ID`, `client_email` → `FIREBASE_CLIENT_EMAIL`, and
    `private_key` → `FIREBASE_PRIVATE_KEY` (keep the `\n` escapes as-is).
    Delete the downloaded JSON once copied; never commit it.
+
+### Firebase Storage emulator (no live bucket needed)
+
+The image pipeline (signed upload → sharp variants → public URL) needs a
+Storage bucket, but creating one needs Firebase's Blaze (pay-as-you-go)
+billing plan enabled on the project — not always available right away (a
+closed billing account blocked bucket creation on this repo's own dev
+project for a while). The [Firebase Storage
+emulator](https://firebase.google.com/docs/emulator-suite) lets the whole
+pipeline run locally against `FirebaseStorageAdapter` — the real adapter,
+not a fake — with no live bucket at all:
+
+```bash
+pnpm emulator:storage   # firebase emulators:start --only storage, port 9199
+```
+
+Then, in another terminal, add to `.env.local`:
+
+```bash
+FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199
+```
+
+and start the app as usual (`pnpm dev`, or `pnpm build && pnpm --filter web start`
+for a production-mode run). `FIREBASE_STORAGE_BUCKET` can stay whatever it
+already is — under emulation the bucket name is just a path prefix, not a
+real bucket that has to exist. `firebase.json`/`storage.rules` at the repo
+root configure the emulator (port 9199, rules loaded but never deployed —
+see `storage.rules`'s own header comment for why they're intentionally
+wide open). `tests/integration/image-storage-firebase-emulator.contract.test.ts`
+runs the full `ImageStorage` contract suite against the emulator whenever
+`FIREBASE_STORAGE_EMULATOR_HOST` is set (see
+[Testing](#testing) below) — CI runs this on every push, so the storage
+adapter contract stays enforced against a real Storage API surface even
+without a live project.
+
+Once the dev project has a live bucket, switch back to the [Firebase
+console steps above](#firebase-dev--preview--prod) — unset
+`FIREBASE_STORAGE_EMULATOR_HOST` and the adapter's production code paths
+(byte-identical either way) start hitting the real bucket again.
 
 ### Neon (dev / preview / prod)
 
@@ -246,6 +286,7 @@ Run from the repo root (each proxies to `apps/web` via pnpm workspaces):
 | `pnpm db:generate` | `drizzle-kit generate` — writes a new migration from schema changes |
 | `pnpm db:migrate` | `drizzle-kit migrate` — applies pending migrations |
 | `pnpm seed` | Runs `apps/web/scripts/seed.ts` — idempotent, inserts ~20 fixture listings |
+| `pnpm emulator:storage` | Starts the Firebase Storage emulator on port 9199 — see [Firebase Storage emulator](#firebase-storage-emulator-no-live-bucket-needed) |
 
 Two scripts aren't proxied at the root and need `pnpm --filter web run <name>`:
 
@@ -269,11 +310,19 @@ for `tests/integration`, and `dom` (jsdom) for anything under
   cleanly when unset — there's no Docker and no local database on a typical
   dev machine, so those only run for real in CI, against a
   `postgis/postgis:16-3.4` service container. The `ImageStorage` contract
-  suite (PRD §8.7) is split across two files instead: `image-storage-
+  suite (PRD §8.7) is split across three files instead: `image-storage-
   inmemory.contract.test.ts` runs everywhere (a fake, no live service
-  needed), and `image-storage-firebase.contract.test.ts` runs only when
-  `TEST_FIREBASE_STORAGE_BUCKET` is set — CI has no such secret, so that
-  half only ever runs locally, deliberately.
+  needed); `image-storage-firebase.contract.test.ts` runs the real adapter
+  against a **live bucket** only when `TEST_FIREBASE_STORAGE_BUCKET` is
+  set — CI has no such secret, so that one only ever runs locally,
+  deliberately; and `image-storage-firebase-emulator.contract.test.ts`
+  runs the same real adapter against the **[Storage
+  emulator](#firebase-storage-emulator-no-live-bucket-needed)** whenever
+  `FIREBASE_STORAGE_EMULATOR_HOST` is set — CI runs this one on every
+  push (`pnpm emulator:storage`'s config, wrapped by `firebase-tools
+  emulators:exec` in the `integration` job), so the storage adapter
+  contract is enforced against a real Storage API surface continuously,
+  not just locally when someone happens to have a live bucket configured.
 - **e2e** — `pnpm test:e2e` (Playwright + axe). With `BASE_URL` unset, it
   builds and starts the app itself against a placeholder environment (no
   real Firebase/database needed). Set `BASE_URL` to point Playwright at an

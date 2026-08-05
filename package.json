@@ -16,6 +16,7 @@
     "test:e2e": "pnpm --filter web test:e2e",
     "db:generate": "pnpm --filter web db:generate",
     "db:migrate": "pnpm --filter web db:migrate",
-    "seed": "pnpm --filter web seed"
+    "seed": "pnpm --filter web seed",
+    "emulator:storage": "firebase emulators:start --only storage --project my-shop-cdeac"
   }
 }

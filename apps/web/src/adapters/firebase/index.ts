@@ -13,4 +13,6 @@ export {
   resolveStorageBucket,
   isVariantPath,
   buildDownloadUrl,
+  resolveStorageEmulatorHost,
+  buildEmulatorUploadUrl,
 } from './firebase-storage-adapter'

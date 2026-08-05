@@ -108,7 +108,7 @@ describe('StepReview', () => {
     expect(screen.getByText('A lovely two-bed flat.')).toBeInTheDocument()
     expect(screen.getByText('Garden, Garage')).toBeInTheDocument()
 
-    expect(screen.getByText('Photos')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Photos' })).toBeInTheDocument()
   })
 
   it('an Edit link jumps back to the right step', () => {
@@ -154,6 +154,21 @@ describe('StepReview', () => {
     )
 
     expect(screen.getByText('1 photo added')).toBeInTheDocument()
+  })
+
+  it('the Photos section’s <dl> contains only valid dl children — a11y: axe’s only-dlitems rule (a real regression the M1 full-journey e2e spec caught: the cover-thumbnail/count div rendered as a bare, non-dt/dd direct child)', () => {
+    const { container } = render(
+      <Harness images={[image({ id: 'img-1', position: 0 })]} />,
+    )
+
+    const photosHeading = screen.getByRole('heading', { name: 'Photos' })
+    const dl = photosHeading.closest('section')?.querySelector('dl')
+    expect(dl).not.toBeNull()
+
+    for (const child of Array.from(dl!.children)) {
+      expect(['DT', 'DD']).toContain(child.tagName)
+    }
+    expect(container.querySelector('dl > img, dl > p')).toBeNull()
   })
 
   it('the Photos section’s Edit link jumps to step 5', () => {

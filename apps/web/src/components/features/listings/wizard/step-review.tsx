@@ -250,7 +250,14 @@ export function StepReview({
       </SummaryGroup>
 
       <SummaryGroup step={5} onEditStep={onEditStep}>
-        <div className="flex items-center gap-3">
+        {/* dt/dd, not a bare div: a <dl>'s direct children must be dt/dd
+         * (optionally div-wrapped) — axe's only-dlitems rule (WCAG
+         * 1.3.1). The dt is sr-only rather than dropped: SummaryGroup's
+         * own <h3> already reads "Photos" (WIZARD_STEP_LABELS[5]) right
+         * above this, so a second, visible "Photos" label here would
+         * just repeat it. */}
+        <dt className="sr-only">Photos</dt>
+        <dd className="flex items-center gap-3">
           {coverPhoto?.urls[0] && (
             // eslint-disable-next-line @next/next/no-img-element -- a remote, already-optimised variant URL, not a local asset.
             <img
@@ -264,7 +271,7 @@ export function StepReview({
               ? 'No photos added yet'
               : `${photoCount} photo${photoCount === 1 ? '' : 's'} added`}
           </p>
-        </div>
+        </dd>
       </SummaryGroup>
 
       <div className="flex flex-col gap-4">
