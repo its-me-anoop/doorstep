@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted — M0 (schema/extension only; search itself is out of scope until M2).
+Accepted — M0 (schema/extension only). Search itself — the Meilisearch
+projection, sync and public API this ADR designs for — landed in M2; see
+`docs/ARCHITECTURE.md` §13–§17.
 
 ## Context
 

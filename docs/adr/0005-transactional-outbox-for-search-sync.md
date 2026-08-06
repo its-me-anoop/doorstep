@@ -2,8 +2,9 @@
 
 ## Status
 
-Accepted — M0 (schema only; the drain worker and reconciliation job are
-implemented starting M2 alongside search itself).
+Accepted — M0 (schema only). The drain worker and nightly reconciliation
+job landed in M2 alongside search itself, per this ADR's design — see
+`docs/ARCHITECTURE.md` §14/§15 and ADR-0008 for the as-implemented detail.
 
 ## Context
 
@@ -75,7 +76,7 @@ present in the index; every other status produces a `delete` op.
   the PRD as the risk mitigation, and worker logic can be unit-tested
   against an in-memory `OutboxRepository` and `SearchIndex` fake without
   real infrastructure (ADR-0001) once that port is written.
-- Search visibility is *eventually* consistent, not immediate — a
+- Search visibility is _eventually_ consistent, not immediate — a
   same-second read of `/api/v1/search` immediately after a publish can
   still show stale results for up to the drain interval. This is an
   accepted trade-off explicitly bounded by the PRD's own "within 1 minute"
