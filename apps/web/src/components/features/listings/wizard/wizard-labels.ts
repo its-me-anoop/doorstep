@@ -64,3 +64,20 @@ export const EPC_RATING_LABELS: Record<
 > = Object.fromEntries(
   EPC_RATING.options.map((option) => [option, option]),
 ) as Record<(typeof EPC_RATING.options)[number], string>
+
+/** step-details.tsx's own bedroom `<select>` option set — also the
+ * buyer-side Beds filter's vocabulary verbatim
+ * (M2-DESIGN-SPEC.md §1.3: "a buyer's mental model of 'studio through
+ * 6+' is the same list a lister just picked from — one vocabulary, not
+ * two"). Lives here, not in step-details.tsx, now that a second
+ * (search-side) consumer exists — the same "shared copy, not duplicated
+ * per caller" rule every other export in this file already follows. */
+export const BEDROOM_OPTIONS = [
+  { value: 0, label: 'Studio' },
+  { value: 1, label: '1' },
+  { value: 2, label: '2' },
+  { value: 3, label: '3' },
+  { value: 4, label: '4' },
+  { value: 5, label: '5' },
+  { value: 6, label: '6+' },
+] as const

@@ -21,7 +21,7 @@
 
 import type { DraftListingInput } from './validation/listing'
 import type { Listing, ListingCursorPage } from '@/ports/listing-repository'
-import type { GeocodeResult } from '@/ports/geocoder'
+import type { GeocodeSuggestion } from '@/services/geocoding/search-geocode'
 import type { ListingStatusAction } from '@/services/listings/change-listing-status'
 
 export class ListingsApiError extends Error {
@@ -104,11 +104,20 @@ export async function submitListing(id: string): Promise<Listing> {
   return listing
 }
 
-/** GET /api/v1/geocode?q= — step 2's "Find address" (§3.2). Always an
- * array (0 or 1 result in M1's postcode-only fast path — see
- * SearchGeocode's own doc comment). */
-export async function geocodeSearch(query: string): Promise<GeocodeResult[]> {
-  const { results } = await request<{ results: GeocodeResult[] }>(
+/** GET /api/v1/geocode?q= — step 2's "Find address" (§3.2) and, on the
+ * buyer side, the search combobox's suggestion dropdown
+ * (M2-DESIGN-SPEC.md §1.9, reused verbatim per that section's own "no
+ * new geocode client" instruction). Doc-shape v2 (see the route's own
+ * comment): each entry is a `GeocodeSuggestion`, tagged `kind: 'postcode'
+ * | 'place'` — the return type was `GeocodeResult[]` (the v1, undiscriminated
+ * shape) until this M2 change; `GeocodeSuggestion` is a structural
+ * superset of the fields v1 callers (step-address.tsx) already read
+ * (`lat`, `lng`, `label`, `outcode`), so this is a type-accuracy fix, not
+ * a breaking change for them. */
+export async function geocodeSearch(
+  query: string,
+): Promise<GeocodeSuggestion[]> {
+  const { results } = await request<{ results: GeocodeSuggestion[] }>(
     `/api/v1/geocode?q=${encodeURIComponent(query)}`,
   )
   return results

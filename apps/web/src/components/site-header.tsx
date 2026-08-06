@@ -1,5 +1,6 @@
 import Link from 'next/link'
 
+import { HeaderSearch } from '@/components/header-search'
 import { SignOutButton } from '@/components/sign-out-button'
 import { Button } from '@/components/ui/button'
 import { Wordmark } from '@/components/wordmark'
@@ -13,15 +14,22 @@ import { getSessionUser } from '@/lib/session'
  * at the cost of opting the (public) route group out of static
  * rendering — an accepted trade-off for M0 (see the commit's fidelity
  * notes; ISR on the marketing pages is a later refinement).
+ *
+ * M2 addition (M2-DESIGN-SPEC.md §2.2): `HeaderSearch` fills the middle
+ * slot between wordmark and nav on every page but the homepage (it
+ * renders `null` there itself, so this header's own markup doesn't need
+ * to know which page it's on) — the one deliberate use of centring
+ * outside a hero/CTA context, per that section's own justification.
  */
 export async function SiteHeader() {
   const session = await getSessionUser()
 
   return (
-    <header className="border-border bg-background border-b">
-      <div className="mx-auto flex h-14 max-w-[1200px] items-center justify-between px-5 sm:px-8 lg:h-[72px] lg:px-16">
+    <header className="border-border bg-background relative border-b">
+      <div className="mx-auto flex h-14 max-w-[1200px] items-center gap-4 px-5 sm:px-8 lg:h-[72px] lg:px-16">
         <Wordmark />
-        <nav className="flex items-center gap-6">
+        <HeaderSearch />
+        <nav className="ml-auto flex items-center gap-6">
           {session ? (
             <>
               <Link

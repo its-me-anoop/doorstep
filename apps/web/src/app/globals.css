@@ -164,6 +164,19 @@
   --status-hidden-bg: var(--paper-100);
   --status-hidden-fg: var(--paper-400);
   --status-hidden-border: var(--paper-300);
+
+  /* ---------------------------------------------------------------- */
+  /* 5c. Buyer-facing search badges (M2-DESIGN-SPEC.md §1.11) — aliases  */
+  /*    onto existing scale tokens, distinct names from the lister-      */
+  /*    facing --status-* set above so a buyer-facing merchandising      */
+  /*    badge is never confused with the PropertyStatus lifecycle        */
+  /*    badges, even where the underlying colour pair happens to match.  */
+  /* ---------------------------------------------------------------- */
+  --badge-new-bg: var(--clay-050);
+  --badge-new-fg: var(--clay-600);
+
+  --badge-private-bg: var(--secondary);
+  --badge-private-fg: var(--secondary-foreground);
 }
 
 /*
@@ -226,6 +239,12 @@
   --color-status-hidden-bg: var(--status-hidden-bg);
   --color-status-hidden-fg: var(--status-hidden-fg);
   --color-status-hidden-border: var(--status-hidden-border);
+
+  /* Buyer-facing search badges (§5c above) */
+  --color-badge-new-bg: var(--badge-new-bg);
+  --color-badge-new-fg: var(--badge-new-fg);
+  --color-badge-private-bg: var(--badge-private-bg);
+  --color-badge-private-fg: var(--badge-private-fg);
 
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);

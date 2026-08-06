@@ -24,22 +24,13 @@ import type { ListingFormValues } from '@/lib/listing-wizard-form'
 
 import type { useStepValidation } from './use-step-validation'
 import {
+  BEDROOM_OPTIONS,
   FURNISHED_LABELS,
   PRICE_QUALIFIER_LABELS,
   TENURE_LABELS,
 } from './wizard-labels'
 
 const fieldClassName = 'h-11 rounded-[var(--radius-md)]'
-
-const BEDROOM_OPTIONS = [
-  { value: 0, label: 'Studio' },
-  { value: 1, label: '1' },
-  { value: 2, label: '2' },
-  { value: 3, label: '3' },
-  { value: 4, label: '4' },
-  { value: 5, label: '5' },
-  { value: 6, label: '6+' },
-]
 
 const BATHROOM_OPTIONS = [
   { value: 1, label: '1' },
