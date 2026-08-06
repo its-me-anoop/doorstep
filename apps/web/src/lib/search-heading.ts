@@ -11,12 +11,17 @@
 import type { Channel } from '@/domain/enums'
 import type { SearchUrlState } from '@/lib/search-url'
 
-export type SearchHeadingTier = 'unrestricted' | 'search'
+export type SearchHeadingTier = 'unrestricted' | 'search' | 'area'
 
 interface BuildSearchHeadingInput {
   channel: Channel
   state: SearchUrlState
   tier: SearchHeadingTier
+  /** Required (by convention, not the type system — see this file's own
+   * tests) when `tier === 'area'`; ignored otherwise. The area tier's URL
+   * never carries `state.label` (the area comes from the route segment),
+   * so its heading label is threaded in separately. */
+  areaLabel?: string
 }
 
 const UNRESTRICTED_AREA_LABEL = 'Reading & the Thames Valley'
@@ -52,18 +57,21 @@ function capitalise(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
-export function buildSearchHeading({
-  channel,
-  state,
-  tier,
-}: BuildSearchHeadingInput): string {
+function areaWords(input: BuildSearchHeadingInput): string {
+  if (input.tier === 'search') return input.state.label ?? ''
+  if (input.tier === 'area') return input.areaLabel ?? ''
+  return UNRESTRICTED_AREA_LABEL
+}
+
+export function buildSearchHeading(input: BuildSearchHeadingInput): string {
+  const { channel, state, tier } = input
   const subject = subjectWord(state)
   const bedsPrefix = state.minBeds !== undefined ? `${state.minBeds}-bed ` : ''
   // A beds prefix makes the subject word mid-sentence, so it's lowercase
   // there; capitalise() then re-capitalises whatever ends up first.
   const words = `${bedsPrefix}${bedsPrefix ? subject.toLowerCase() : subject}`
 
-  const area = tier === 'search' ? (state.label ?? '') : UNRESTRICTED_AREA_LABEL
+  const area = areaWords(input)
   const preposition = tier === 'search' ? 'near' : 'in'
 
   return capitalise(`${words} ${CHANNEL_VERB[channel]} ${preposition} ${area}`)

@@ -10,6 +10,7 @@
 import type { OutboxOp, PropertyStatus } from '@/domain/enums'
 import {
   ListingNotFoundError,
+  type AreaListingCriteria,
   type Listing,
   type ListingCursorPage,
   type ListingReader,
@@ -82,6 +83,27 @@ export class FakeListingRepository implements ListingReader, ListingWriter {
     return [...this.byId.values()].filter((listing) =>
       INDEXABLE_STATUSES.has(listing.status),
     ).length
+  }
+
+  async listNewestPublished(
+    criteria: AreaListingCriteria,
+    limit: number,
+  ): Promise<Listing[]> {
+    return [...this.byId.values()]
+      .filter(
+        (listing) =>
+          listing.status === 'published' &&
+          listing.channel === criteria.channel &&
+          (criteria.town === undefined || listing.town === criteria.town) &&
+          (criteria.outcode === undefined ||
+            listing.outcode === criteria.outcode),
+      )
+      .sort((a, b) => {
+        const aTime = a.publishedAt?.getTime() ?? 0
+        const bTime = b.publishedAt?.getTime() ?? 0
+        return bTime - aTime
+      })
+      .slice(0, limit)
   }
 
   async createDraft(draft: NewListingDraft): Promise<Listing> {

@@ -1,12 +1,15 @@
 import { redirect } from 'next/navigation'
 
 import type { Channel } from '@/domain/enums'
+import { AreaIntro } from '@/components/features/search/area-intro'
 import { Breadcrumb } from '@/components/features/search/breadcrumb'
 import { ResultsView } from '@/components/features/search/results-view'
+import { areaMatchToFilter, type AreaDefinition } from '@/lib/areas'
 import { createServices } from '@/lib/composition'
 import type { SearchHeadingTier } from '@/lib/search-heading'
 import { fetchInitialSearchResult } from '@/lib/server-search'
 import {
+  hasActiveSearchFilters,
   needsCanonicalRedirect,
   nextSearchParamsToURLSearchParams,
   parseSearchUrlState,
@@ -17,6 +20,10 @@ interface SearchResultsPageProps {
   channel: Channel
   tier: SearchHeadingTier
   rawSearchParams: Record<string, string | string[] | undefined>
+  /** Required (by convention — see this file's own tests) when
+   * `tier === 'area'`; the curated area this page is scoped to (§4).
+   * Ignored for every other tier. */
+  area?: AreaDefinition
 }
 
 const CHANNEL_SLUG: Record<Channel, string> = {
@@ -57,8 +64,11 @@ export async function SearchResultsPage({
   channel,
   tier,
   rawSearchParams,
+  area,
 }: SearchResultsPageProps) {
-  const basePath = `/${CHANNEL_SLUG[channel]}${tier === 'search' ? '/search' : ''}`
+  const basePath = area
+    ? `/${CHANNEL_SLUG[channel]}/${area.slug}`
+    : `/${CHANNEL_SLUG[channel]}${tier === 'search' ? '/search' : ''}`
   const rawParams = nextSearchParamsToURLSearchParams(rawSearchParams)
 
   const canonicalQuery = needsCanonicalRedirect(rawParams)
@@ -67,13 +77,24 @@ export async function SearchResultsPage({
   }
 
   const state = parseSearchUrlState(rawParams)
-  const { search } = createServices()
+  const areaFilter = area ? areaMatchToFilter(area.match) : undefined
+  const { search, listings } = createServices()
   const initialResult = await fetchInitialSearchResult(
     search.searchListings,
     state,
     channel,
+    areaFilter,
   )
   const now = currentUnixSeconds()
+
+  // §4.1: the intro/newest-strip section renders only on the canonical,
+  // zero-filter area URL — the moment a filter is active, this page is
+  // "results for {area} with a filter," not "the {area} landing page."
+  const showAreaSection = Boolean(area) && !hasActiveSearchFilters(state)
+  const newestInArea =
+    showAreaSection && area && areaFilter
+      ? await listings.listNewestInArea.execute(channel, areaFilter)
+      : []
 
   const unfilteredHref =
     tier === 'search'
@@ -92,8 +113,13 @@ export async function SearchResultsPage({
         })()
       : basePath
 
+  const hasThirdCrumb = tier === 'search' || tier === 'area'
   const finalCrumbLabel =
-    tier === 'search' ? (state.label ?? 'Search') : CHANNEL_CRUMB_LABEL[channel]
+    tier === 'area'
+      ? (area?.label ?? '')
+      : tier === 'search'
+        ? (state.label ?? 'Search')
+        : CHANNEL_CRUMB_LABEL[channel]
 
   const prevHref =
     initialResult && initialResult.page > 1
@@ -112,13 +138,13 @@ export async function SearchResultsPage({
       <Breadcrumb
         items={[
           { label: 'Home', href: '/' },
-          tier === 'search'
+          hasThirdCrumb
             ? {
                 label: CHANNEL_CRUMB_LABEL[channel],
-                href: basePath.replace('/search', ''),
+                href: `/${CHANNEL_SLUG[channel]}`,
               }
             : { label: CHANNEL_CRUMB_LABEL[channel] },
-          ...(tier === 'search' ? [{ label: finalCrumbLabel }] : []),
+          ...(hasThirdCrumb ? [{ label: finalCrumbLabel }] : []),
         ]}
       />
 
@@ -130,6 +156,19 @@ export async function SearchResultsPage({
           initialResult={initialResult}
           unfilteredHref={unfilteredHref}
           now={now}
+          areaFilter={areaFilter}
+          areaLabel={area?.label}
+          areaSection={
+            showAreaSection && area ? (
+              <AreaIntro
+                area={area}
+                channel={channel}
+                newest={newestInArea}
+                totalCount={initialResult?.totalCount ?? 0}
+                now={now}
+              />
+            ) : undefined
+          }
         />
       </div>
     </div>

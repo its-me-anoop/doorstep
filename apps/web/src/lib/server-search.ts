@@ -11,7 +11,11 @@
  */
 
 import type { Channel } from '@/domain/enums'
-import { buildSearchApiQuery, type SearchUrlState } from '@/lib/search-url'
+import {
+  buildSearchApiQuery,
+  type SearchAreaFilter,
+  type SearchUrlState,
+} from '@/lib/search-url'
 import { searchQuerySchema } from '@/lib/validation/search'
 import { SearchUnavailableError } from '@/services/search'
 import type {
@@ -23,13 +27,18 @@ import type {
  * equivalent) — the page renders the outage panel from first paint
  * rather than the route itself failing. Any other error propagates: an
  * SSR page throwing on a genuine bug is the correct default (surfaced by
- * Next's error boundary), not silently swallowed into a false "outage". */
+ * Next's error boundary), not silently swallowed into a false "outage".
+ * `areaFilter` (§4) scopes the fetch to a curated area's town/outcode —
+ * omitted for the unrestricted/search tiers, which have none. */
 export async function fetchInitialSearchResult(
   searchListings: SearchListings,
   state: SearchUrlState,
   channel: Channel,
+  areaFilter?: SearchAreaFilter,
 ): Promise<PublicSearchResult | null> {
-  const query = searchQuerySchema.parse(buildSearchApiQuery(state, channel))
+  const query = searchQuerySchema.parse(
+    buildSearchApiQuery(state, channel, areaFilter),
+  )
 
   try {
     return await searchListings.execute(query)

@@ -26,6 +26,7 @@ import { and, count, desc, eq, inArray, lt, type SQL } from 'drizzle-orm'
 import type { PropertyStatus } from '@/domain/enums'
 import {
   ListingNotFoundError,
+  type AreaListingCriteria,
   type Listing,
   type ListingCursorPage,
   type ListingReader,
@@ -280,6 +281,31 @@ export class DrizzleListingRepository implements ListingReader, ListingWriter {
       .where(eq(properties.id, id))
       .returning({ id: properties.id })
     if (!row) throw new ListingNotFoundError(id)
+  }
+
+  async listNewestPublished(
+    criteria: AreaListingCriteria,
+    limit: number,
+  ): Promise<Listing[]> {
+    const clauses: SQL[] = [
+      eq(properties.status, 'published'),
+      eq(properties.channel, criteria.channel),
+    ]
+    if (criteria.town !== undefined) {
+      clauses.push(eq(properties.town, criteria.town))
+    }
+    if (criteria.outcode !== undefined) {
+      clauses.push(eq(properties.outcode, criteria.outcode))
+    }
+
+    const rows = await this.db
+      .select()
+      .from(properties)
+      .where(and(...clauses))
+      .orderBy(desc(properties.publishedAt))
+      .limit(limit)
+
+    return rows.map(mapRowToListing)
   }
 
   private async listBy(

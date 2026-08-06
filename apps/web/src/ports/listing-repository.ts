@@ -20,7 +20,7 @@
  * listing that isn't currently publicly visible.
  */
 
-import type { OutboxOp, PropertyStatus } from '@/domain/enums'
+import type { Channel, OutboxOp, PropertyStatus } from '@/domain/enums'
 import type { PropertyEntity } from '@/domain/property'
 
 export type Listing = PropertyEntity
@@ -74,6 +74,30 @@ export interface ListingReader {
    * against Meilisearch's own document count (PRD §8.6: "a count-mismatch
    * alert catches sync bugs"). */
   countIndexable(): Promise<number>
+  /**
+   * Up to `limit` **`published`** listings (deliberately narrower than
+   * `listIndexable`'s published+under_offer pair — M2-DESIGN-SPEC.md
+   * §4.1 point 3 asks for "the 4 most recent **published** listings",
+   * not a listing currently under offer) matching `criteria.channel` and
+   * either `criteria.town` or `criteria.outcode` (mutually exclusive,
+   * matching `lib/areas.ts`'s `AreaDefinition.match` — callers pass
+   * exactly one), newest `publishedAt` first.
+   *
+   * The one place an area landing page's "Newest in {area}" strip
+   * (services/listings/list-newest-in-area.ts) reads from — Postgres
+   * directly, not Meilisearch, so it keeps working during a search-index
+   * outage (§1.10 point 4).
+   */
+  listNewestPublished(
+    criteria: AreaListingCriteria,
+    limit: number,
+  ): Promise<Listing[]>
+}
+
+export interface AreaListingCriteria {
+  channel: Channel
+  town?: string
+  outcode?: string
 }
 
 /**

@@ -11,7 +11,7 @@
 
 export { mapListingToSearchDocument } from './map-listing-to-search-document'
 export { NotIndexableListingError, SearchUnavailableError } from './errors'
-export { SearchListings } from './search-listings'
+export { SearchListings, toPublicHit } from './search-listings'
 export type {
   PublicSearchAgency,
   PublicSearchHit,

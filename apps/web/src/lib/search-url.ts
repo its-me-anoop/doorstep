@@ -279,11 +279,25 @@ export function needsCanonicalRedirect(
  * picking one of several user-selected values would filter out results
  * the user asked to see).
  */
+/** An area landing page's server-side scope (M2-DESIGN-SPEC.md §4,
+ * `lib/areas.ts`'s `AreaDefinition.match`) — deliberately the same flat
+ * shape as that module's `AreaMatch` rather than importing it directly,
+ * keeping this generic URL-vocabulary module free of a dependency on the
+ * area *registry* (only the page/component layer that already knows
+ * about `lib/areas.ts` needs to pass one in). */
+export interface SearchAreaFilter {
+  town?: string
+  outcode?: string
+}
+
 export function buildSearchApiQuery(
   state: SearchUrlState,
   channel: Channel,
+  areaFilter?: SearchAreaFilter,
 ): Record<string, string | undefined> {
   const query: Record<string, string | undefined> = { channel }
+  if (areaFilter?.town) query.town = areaFilter.town
+  if (areaFilter?.outcode) query.outcode = areaFilter.outcode
 
   if (state.minPrice !== undefined) query.priceMin = String(state.minPrice)
   if (state.maxPrice !== undefined) query.priceMax = String(state.maxPrice)
@@ -353,6 +367,27 @@ export function resetStateForChannelSwitch(
   if (state.type !== undefined) preserved.type = state.type
   if (state.sort !== undefined) preserved.sort = state.sort
   return preserved
+}
+
+/**
+ * True when `state` carries at least one *filter* (a chip in §1.1's
+ * sense: price, beds, type, furnished or available-from) — as opposed to
+ * sort, page or a `/search`-tier location, none of which render as a
+ * filter chip. Used by the area landing page (§4.1) to decide whether
+ * it's still showing "the area page" (intro copy + newest strip visible)
+ * or has become "results for this area with a filter applied" (those
+ * sections stop rendering).
+ */
+export function hasActiveSearchFilters(state: SearchUrlState): boolean {
+  return (
+    state.minPrice !== undefined ||
+    state.maxPrice !== undefined ||
+    state.minBeds !== undefined ||
+    state.maxBeds !== undefined ||
+    (state.type?.length ?? 0) > 0 ||
+    (state.furnished?.length ?? 0) > 0 ||
+    state.availableFrom !== undefined
+  )
 }
 
 /** §3.8's empty-state link target: "the unrestricted-for-this-area URL

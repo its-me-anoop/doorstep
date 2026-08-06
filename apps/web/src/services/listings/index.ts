@@ -17,10 +17,18 @@ export {
 export { GetListing } from './get-listing'
 export { ListMyListings } from './list-my-listings'
 export { DeleteListing } from './delete-listing'
+export { GetPublicListing } from './get-public-listing'
+export type {
+  PublicListingAgency,
+  PublicListingDetail,
+  PublicListingImage,
+} from './get-public-listing'
+export { ListNewestInArea } from './list-newest-in-area'
 export {
   ListingNotEditableError,
   ListingChannelImmutableError,
   ListingIncompleteError,
   ListingNotDeletableError,
   ListingActionChannelMismatchError,
+  PublicListingNotFoundError,
 } from './errors'

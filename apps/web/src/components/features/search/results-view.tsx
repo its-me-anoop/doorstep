@@ -1,7 +1,13 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useRef, useState, useTransition } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+  type ReactNode,
+} from 'react'
 
 import type { Channel } from '@/domain/enums'
 import { ChannelToggle } from '@/components/features/search/channel-toggle'
@@ -21,6 +27,7 @@ import {
   buildSearchApiQuery,
   buildSearchHref,
   parseSearchUrlState,
+  type SearchAreaFilter,
   type SearchUrlState,
 } from '@/lib/search-url'
 import { cn } from '@/lib/utils'
@@ -45,6 +52,20 @@ interface ResultsViewProps {
    * grid agrees on one New-this-week instant (§1.11) and so a
    * client-side re-render doesn't quietly redraw badges mid-session. */
   now: number
+  /** §4's area landing pages: the curated area's town/outcode, merged
+   * into every re-query (not just the SSR initial one) so applying a
+   * filter on an area page never silently drops its location scope. */
+  areaFilter?: SearchAreaFilter
+  /** The curated area's own name, for the `tier === 'area'` heading and
+   * the empty state's "see all homes ... in {areaLabel}" copy. */
+  areaLabel?: string
+  /** §4.1's intro paragraph + newest-listings strip + CTA — rendered
+   * directly after the `<h1>`, before the filter bar. The caller (not
+   * this component) decides whether to pass it, since that decision
+   * depends on whether any filter is currently active (§4.1: "only
+   * present when zero filters are active") and on data (the newest-strip
+   * listings) this component has no reason to fetch itself. */
+  areaSection?: ReactNode
 }
 
 function todayIsoDate(nowSeconds: number): string {
@@ -75,6 +96,9 @@ export function ResultsView({
   initialResult,
   unfilteredHref,
   now,
+  areaFilter,
+  areaLabel,
+  areaSection,
 }: ResultsViewProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -95,7 +119,7 @@ export function ResultsView({
 
     let cancelled = false
     setIsFetching(true)
-    fetchSearchResults(buildSearchApiQuery(state, channel))
+    fetchSearchResults(buildSearchApiQuery(state, channel, areaFilter))
       .then((data) => {
         if (cancelled) return
         setResult(data)
@@ -140,7 +164,7 @@ export function ResultsView({
     setOutage(false)
     let cancelled = false
     setIsFetching(true)
-    fetchSearchResults(buildSearchApiQuery(state, channel))
+    fetchSearchResults(buildSearchApiQuery(state, channel, areaFilter))
       .then((data) => {
         setResult(data)
         setOutage(false)
@@ -156,8 +180,12 @@ export function ResultsView({
     }
   }
 
-  const heading = buildSearchHeading({ channel, state, tier })
+  const heading = buildSearchHeading({ channel, state, tier, areaLabel })
   const dimmed = isFetching
+  const emptyStateAreaLabel =
+    tier === 'area' && areaLabel
+      ? areaLabel
+      : (state.label ?? 'Reading & the Thames Valley')
 
   return (
     <div className="flex flex-col">
@@ -172,7 +200,9 @@ export function ResultsView({
         {heading}
       </h1>
 
-      <div className="mt-6">
+      {areaSection}
+
+      <div id="listings" className="mt-6">
         <FilterBar
           channel={channel}
           state={state}
@@ -213,7 +243,7 @@ export function ResultsView({
         ) : result.results.length === 0 ? (
           <EmptyState
             unfilteredHref={unfilteredHref}
-            areaLabel={state.label ?? 'Reading & the Thames Valley'}
+            areaLabel={emptyStateAreaLabel}
             channel={channel}
           />
         ) : (

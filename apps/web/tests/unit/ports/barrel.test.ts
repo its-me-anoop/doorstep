@@ -51,6 +51,8 @@ describe('ports barrel', () => {
       expect(services.listings.changeListingStatus).toBeDefined()
       expect(services.listings.getListing).toBeDefined()
       expect(services.listings.listMyListings).toBeDefined()
+      expect(services.listings.getPublicListing).toBeDefined()
+      expect(services.listings.listNewestInArea).toBeDefined()
     })
 
     it('wires the geocoding service group', () => {

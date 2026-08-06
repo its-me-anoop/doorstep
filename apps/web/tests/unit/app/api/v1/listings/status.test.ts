@@ -17,6 +17,11 @@ vi.mock('@/lib/composition', () => ({
   }),
 }))
 
+const revalidatePathMock = vi.fn()
+vi.mock('next/cache', () => ({
+  revalidatePath: (path: string) => revalidatePathMock(path),
+}))
+
 function postRequest(body: unknown, cookie?: string): NextRequest {
   const headers = new Headers({ 'Content-Type': 'application/json' })
   if (cookie) headers.set('cookie', `${SESSION_COOKIE_NAME}=${cookie}`)
@@ -34,6 +39,7 @@ describe('POST /api/v1/listings/[id]/status', () => {
   beforeEach(() => {
     getCurrentUser.execute.mockReset()
     changeListingStatus.execute.mockReset()
+    revalidatePathMock.mockClear()
   })
 
   it('401s with no session cookie, without touching the body', async () => {
@@ -59,7 +65,14 @@ describe('POST /api/v1/listings/[id]/status', () => {
 
   it('changes status and returns {data: {listing}}', async () => {
     const actor = { id: 'user-1', role: 'owner' }
-    const listing = { id: 'listing-1', status: 'hidden' }
+    const listing = {
+      id: 'listing-1',
+      status: 'hidden',
+      slug: 'a-slug',
+      channel: 'sale',
+      town: 'Reading',
+      outcode: 'RG1',
+    }
     getCurrentUser.execute.mockResolvedValue({
       user: actor,
       identity: {},
@@ -81,6 +94,48 @@ describe('POST /api/v1/listings/[id]/status', () => {
     expect(response.status).toBe(200)
     const body = await response.json()
     expect(body.data.listing).toEqual(listing)
+  })
+
+  // PRD §8.3: status changes always affect a listing's public visibility
+  // one way or the other, so this route is one of the two mutation points
+  // that revalidates the detail page (and any matching area page) —
+  // see lib/listing-revalidation.ts's doc comment.
+  it('revalidates the listing detail page and its matching area page on success', async () => {
+    getCurrentUser.execute.mockResolvedValue({
+      user: { id: 'user-1', role: 'owner' },
+      identity: {},
+      reissue: false,
+    })
+    changeListingStatus.execute.mockResolvedValue({
+      id: 'listing-1',
+      status: 'published',
+      slug: 'a-slug',
+      channel: 'sale',
+      town: 'Reading',
+      outcode: 'RG1',
+    })
+    const { POST } = await import('@/app/api/v1/listings/[id]/status/route')
+
+    await POST(postRequest({ action: 'back_on_market' }, 'the-cookie'), ctx())
+
+    expect(revalidatePathMock).toHaveBeenCalledWith('/property/a-slug')
+    expect(revalidatePathMock).toHaveBeenCalledWith('/for-sale/reading')
+  })
+
+  it('does not revalidate anything when the mutation fails', async () => {
+    getCurrentUser.execute.mockResolvedValue({
+      user: { id: 'user-1', role: 'owner' },
+      identity: {},
+      reissue: false,
+    })
+    changeListingStatus.execute.mockRejectedValue(
+      new ListingNotFoundError('listing-1'),
+    )
+    const { POST } = await import('@/app/api/v1/listings/[id]/status/route')
+
+    await POST(postRequest({ action: 'hide' }, 'the-cookie'), ctx())
+
+    expect(revalidatePathMock).not.toHaveBeenCalled()
   })
 
   it('maps ListingNotFoundError to 404', async () => {

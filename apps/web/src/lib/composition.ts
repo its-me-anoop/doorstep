@@ -93,7 +93,9 @@ import {
   CreateListingDraft,
   DeleteListing,
   GetListing,
+  GetPublicListing,
   ListMyListings,
+  ListNewestInArea,
   SubmitListing,
   UpdateListing,
 } from '@/services/listings'
@@ -119,6 +121,8 @@ export interface ListingServices {
   getListing: GetListing
   listMyListings: ListMyListings
   deleteListing: DeleteListing
+  getPublicListing: GetPublicListing
+  listNewestInArea: ListNewestInArea
 }
 
 export interface GeocodingServices {
@@ -220,6 +224,18 @@ export function createServices(): Services {
       getListing: new GetListing(listingRepository),
       listMyListings: new ListMyListings(listingRepository),
       deleteListing: new DeleteListing(listingRepository, listingRepository),
+      getPublicListing: new GetPublicListing(
+        listingRepository,
+        propertyImageRepository,
+        agencyRepository,
+        imageStorage,
+      ),
+      listNewestInArea: new ListNewestInArea(
+        listingRepository,
+        propertyImageRepository,
+        agencyRepository,
+        imageStorage,
+      ),
     },
     geocoding: {
       searchGeocode: new SearchGeocode(

@@ -167,7 +167,13 @@ function toPublicAgency(
   return { id: agency.id, name: agency.name, logoUrl: agency.logoUrl }
 }
 
-function toPublicHit(document: ListingSearchDocument): PublicSearchHit {
+/** Exported for services/listings/list-newest-in-area.ts's area-landing
+ * page strip (M2-DESIGN-SPEC.md §4.1 point 3): that service builds the
+ * exact same `ListingSearchDocument` shape (via
+ * mapListingToSearchDocument, reading straight from Postgres rather than
+ * Meilisearch) for its own reasons, and reuses this mapper rather than
+ * duplicating the document-to-DTO translation a second time. */
+export function toPublicHit(document: ListingSearchDocument): PublicSearchHit {
   return {
     id: document.id,
     slug: document.slug,

@@ -17,6 +17,12 @@
  *    let_agreed on a sale listing. 400 invalid_request, same code PATCH
  *    /api/v1/listings/{id} uses for ListingChannelImmutableError — both
  *    are "this request doesn't fit this listing's channel".
+ *
+ * Every reachable transition here changes public visibility one way or
+ * the other (change-listing-status.ts's own doc comment), so a
+ * successful call always revalidates the listing's detail page and any
+ * matching area landing page (PRD §8.3's on-demand ISR requirement) —
+ * see lib/listing-revalidation.ts.
  */
 
 import { NextResponse, type NextRequest } from 'next/server'
@@ -25,6 +31,7 @@ import { InvalidTransitionError } from '@/domain/property-status-machine'
 import { apiError } from '@/lib/api-error'
 import { createServices } from '@/lib/composition'
 import { mapCommonListingError } from '@/lib/listing-api-errors'
+import { revalidateListingPaths } from '@/lib/listing-revalidation'
 import { resolveSessionUser } from '@/lib/resolve-session-user'
 import { SESSION_COOKIE_NAME } from '@/lib/session-cookie-name'
 import { changeListingStatusSchema } from '@/lib/validation/listing'
@@ -64,6 +71,7 @@ export async function POST(
       id,
       parsed.data.action,
     )
+    revalidateListingPaths(listing)
     return NextResponse.json({ data: { listing } })
   } catch (error) {
     if (error instanceof InvalidTransitionError) {

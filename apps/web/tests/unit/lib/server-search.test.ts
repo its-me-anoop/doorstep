@@ -43,6 +43,25 @@ describe('fetchInitialSearchResult', () => {
     })
   })
 
+  it('merges an area filter into the query when provided (§4 area landing pages)', async () => {
+    const execute = vi.fn().mockResolvedValue({
+      results: [],
+      totalCount: 0,
+      page: 1,
+      totalPages: 1,
+      facets: { propertyType: {} },
+    })
+    const searchListings = { execute } as unknown as SearchListings
+
+    await fetchInitialSearchResult(searchListings, { minBeds: 2 }, 'sale', {
+      town: 'Reading',
+    })
+
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({ town: 'Reading', bedsMin: 2 }),
+    )
+  })
+
   it('returns null on a SearchUnavailableError rather than throwing (SSR outage path)', async () => {
     const execute = vi.fn().mockRejectedValue(new SearchUnavailableError())
     const searchListings = { execute } as unknown as SearchListings

@@ -105,3 +105,22 @@ export class ListingActionChannelMismatchError extends Error {
     this.channel = channel
   }
 }
+
+/**
+ * GetPublicListing (PRD §10's GET /api/v1/properties/{slug},
+ * M2-DESIGN-SPEC.md §5) throws this for both an unknown slug AND a slug
+ * whose listing exists but isn't `published`/`under_offer` — the same
+ * error either way, deliberately: a public, unauthenticated caller must
+ * never be able to distinguish "no such listing" from "that listing
+ * exists but is hidden/pending/draft," which would leak lifecycle state
+ * to a visitor with no authorisation to see it.
+ */
+export class PublicListingNotFoundError extends Error {
+  readonly slug: string
+
+  constructor(slug: string) {
+    super(`No public listing with slug "${slug}"`)
+    this.name = 'PublicListingNotFoundError'
+    this.slug = slug
+  }
+}

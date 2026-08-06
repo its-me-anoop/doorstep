@@ -16,13 +16,25 @@
  * listing is entirely identified by the path segment — and returns
  * `{ data: { deleted: true } }` rather than the listing itself, since
  * there is nothing left to return.
+ *
+ * PATCH revalidates the listing's detail page (and any matching area
+ * page) on success, but only when the *updated* listing is publicly
+ * visible (published/under_offer — the same pair
+ * services/listings/update-listing.ts's own VISIBLE_STATUSES names,
+ * duplicated locally per this codebase's established convention for that
+ * pair — see e.g. change-listing-status.ts's isVisible): a draft,
+ * rejected or pending_review edit has no public page to revalidate. GET
+ * and DELETE never change visibility, so neither revalidates anything
+ * (see lib/listing-revalidation.ts).
  */
 
 import { NextResponse, type NextRequest } from 'next/server'
 
+import type { PropertyStatus } from '@/domain/enums'
 import { apiError } from '@/lib/api-error'
 import { createServices } from '@/lib/composition'
 import { mapCommonListingError } from '@/lib/listing-api-errors'
+import { revalidateListingPaths } from '@/lib/listing-revalidation'
 import { resolveSessionUser } from '@/lib/resolve-session-user'
 import { SESSION_COOKIE_NAME } from '@/lib/session-cookie-name'
 import { draftListingSchema } from '@/lib/validation/listing'
@@ -31,6 +43,11 @@ import {
   ListingNotDeletableError,
   ListingNotEditableError,
 } from '@/services/listings'
+
+const VISIBLE_STATUSES: ReadonlySet<PropertyStatus> = new Set([
+  'published',
+  'under_offer',
+])
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -83,6 +100,9 @@ export async function PATCH(
 
     const { id } = await params
     const listing = await listings.updateListing.execute(actor, id, parsed.data)
+    if (VISIBLE_STATUSES.has(listing.status)) {
+      revalidateListingPaths(listing)
+    }
     return NextResponse.json({ data: { listing } })
   } catch (error) {
     if (error instanceof ListingNotEditableError) {

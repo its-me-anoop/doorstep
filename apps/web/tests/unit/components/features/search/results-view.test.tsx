@@ -180,6 +180,61 @@ describe('ResultsView', () => {
     expect(screen.getByText('Search’s taking a breather.')).toBeInTheDocument()
   })
 
+  // §4 area landing pages — ResultsView is reused verbatim for
+  // `/for-sale/{area}`, so its own area-specific plumbing lives here
+  // rather than a parallel component.
+  it('renders the "in {area}" heading and threads the area filter into re-queries', async () => {
+    fetchSearchResultsMock.mockResolvedValue(baseResult())
+    const { rerender } = render(
+      <ResultsView
+        channel="sale"
+        basePath="/for-sale/reading"
+        tier="area"
+        areaLabel="Reading"
+        areaFilter={{ town: 'Reading' }}
+        initialResult={baseResult()}
+        unfilteredHref="/for-sale/reading"
+        now={1000}
+      />,
+    )
+    expect(screen.getByText('Homes for sale in Reading')).toBeInTheDocument()
+
+    currentSearch = 'minBeds=2'
+    rerender(
+      <ResultsView
+        channel="sale"
+        basePath="/for-sale/reading"
+        tier="area"
+        areaLabel="Reading"
+        areaFilter={{ town: 'Reading' }}
+        initialResult={baseResult()}
+        unfilteredHref="/for-sale/reading"
+        now={1000}
+      />,
+    )
+    await flush()
+
+    expect(fetchSearchResultsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ town: 'Reading', bedsMin: '2' }),
+    )
+  })
+
+  it('renders the optional areaSection content directly after the heading', () => {
+    render(
+      <ResultsView
+        channel="sale"
+        basePath="/for-sale/reading"
+        tier="area"
+        areaLabel="Reading"
+        areaSection={<p data-testid="area-intro">Reading is lovely.</p>}
+        initialResult={baseResult()}
+        unfilteredHref="/for-sale/reading"
+        now={1000}
+      />,
+    )
+    expect(screen.getByTestId('area-intro')).toBeInTheDocument()
+  })
+
   it('shows the empty state when a re-query returns zero results', async () => {
     fetchSearchResultsMock.mockResolvedValue(
       baseResult({ results: [], totalCount: 0 }),

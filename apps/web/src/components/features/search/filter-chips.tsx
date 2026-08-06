@@ -5,6 +5,7 @@ import {
   FURNISHED_LABELS,
   PROPERTY_TYPE_LABELS,
 } from '@/components/features/listings/wizard/wizard-labels'
+import { formatIsoDateLong } from '@/lib/format-date'
 import type { SearchUrlState } from '@/lib/search-url'
 
 interface FilterChipsProps {
@@ -57,16 +58,6 @@ function multiValueChipLabel(
   return `${values.length} ${countNoun}`
 }
 
-function formatDateChipLabel(date: string): string {
-  const parsed = new Date(`${date}T00:00:00`)
-  if (Number.isNaN(parsed.getTime())) return date
-  return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(parsed)
-}
-
 function buildChips(state: SearchUrlState, channel: Channel): Chip[] {
   const chips: Chip[] = []
 
@@ -113,7 +104,7 @@ function buildChips(state: SearchUrlState, channel: Channel): Chip[] {
   if (channel === 'rent' && state.availableFrom) {
     chips.push({
       id: 'availableFrom',
-      label: `Available by ${formatDateChipLabel(state.availableFrom)}`,
+      label: `Available by ${formatIsoDateLong(state.availableFrom)}`,
       remove: (s) => ({ ...s, availableFrom: undefined }),
     })
   }

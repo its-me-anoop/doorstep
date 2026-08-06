@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildSearchApiQuery,
   buildSearchHref,
+  hasActiveSearchFilters,
   needsCanonicalRedirect,
   nextSearchParamsToURLSearchParams,
   parseSearchUrlState,
@@ -301,6 +302,63 @@ describe('buildSearchApiQuery', () => {
     )
     expect(query.furnished).toBeUndefined()
     expect(query.availableBy).toBeUndefined()
+  })
+
+  // §4 — an area landing page scopes every query (initial SSR fetch and
+  // every client re-query alike) to its town/outcode, on top of whatever
+  // filters the URL itself carries.
+  it('adds a town area filter when provided', () => {
+    const query = buildSearchApiQuery({ minBeds: 2 }, 'sale', {
+      town: 'Reading',
+    })
+    expect(query.town).toBe('Reading')
+    expect(query.bedsMin).toBe('2')
+  })
+
+  it('adds an outcode area filter when provided', () => {
+    const query = buildSearchApiQuery({}, 'sale', { outcode: 'RG6' })
+    expect(query.outcode).toBe('RG6')
+  })
+
+  it('omits town/outcode entirely when no area filter is given', () => {
+    const query = buildSearchApiQuery({}, 'sale')
+    expect(query.town).toBeUndefined()
+    expect(query.outcode).toBeUndefined()
+  })
+})
+
+describe('hasActiveSearchFilters', () => {
+  it('is false for an empty state', () => {
+    expect(hasActiveSearchFilters({})).toBe(false)
+  })
+
+  it('is false when only sort/page/location are set (not filter chips, §1.1)', () => {
+    expect(
+      hasActiveSearchFilters({
+        sort: 'price_asc',
+        page: 2,
+        lat: 51.45,
+        lng: -0.98,
+        radius: 3,
+        label: 'RG1 8BT',
+      }),
+    ).toBe(false)
+  })
+
+  it.each<SearchUrlState>([
+    { minPrice: 250000 },
+    { maxPrice: 400000 },
+    { minBeds: 2 },
+    { maxBeds: 4 },
+    { type: ['flat'] },
+    { furnished: ['furnished'] },
+    { availableFrom: '2026-09-01' },
+  ])('is true when %j is set', (partial) => {
+    expect(hasActiveSearchFilters(partial)).toBe(true)
+  })
+
+  it('is false when type/furnished are present but empty', () => {
+    expect(hasActiveSearchFilters({ type: [], furnished: [] })).toBe(false)
   })
 })
 

@@ -22,6 +22,11 @@ vi.mock('@/lib/composition', () => ({
   }),
 }))
 
+const revalidatePathMock = vi.fn()
+vi.mock('next/cache', () => ({
+  revalidatePath: (path: string) => revalidatePathMock(path),
+}))
+
 function getRequest(cookie?: string): NextRequest {
   const headers = new Headers()
   if (cookie) headers.set('cookie', `${SESSION_COOKIE_NAME}=${cookie}`)
@@ -122,6 +127,7 @@ describe('PATCH /api/v1/listings/[id]', () => {
   beforeEach(() => {
     getCurrentUser.execute.mockReset()
     updateListing.execute.mockReset()
+    revalidatePathMock.mockClear()
   })
 
   it('401s with no session cookie, without touching the body', async () => {
@@ -174,6 +180,60 @@ describe('PATCH /api/v1/listings/[id]', () => {
     expect(response.status).toBe(200)
     const body = await response.json()
     expect(body.data.listing).toEqual(updated)
+  })
+
+  // PRD §8.3's on-demand ISR: a PATCH to an already-visible listing can
+  // change facts shown on its detail page (and, indirectly, its area
+  // page's strip), so it revalidates both — see
+  // lib/listing-revalidation.ts.
+  it('revalidates the detail page when the updated listing is published', async () => {
+    const actor = { id: 'user-1', role: 'owner' }
+    getCurrentUser.execute.mockResolvedValue({
+      user: actor,
+      identity: {},
+      reissue: false,
+    })
+    updateListing.execute.mockResolvedValue({
+      id: 'listing-1',
+      status: 'published',
+      slug: 'a-slug',
+      channel: 'sale',
+      town: 'Reading',
+      outcode: 'RG1',
+    })
+    const { PATCH } = await import('@/app/api/v1/listings/[id]/route')
+
+    await PATCH(
+      patchRequest({ channel: 'sale', propertyType: 'flat' }, 'the-cookie'),
+      ctx('listing-1'),
+    )
+
+    expect(revalidatePathMock).toHaveBeenCalledWith('/property/a-slug')
+    expect(revalidatePathMock).toHaveBeenCalledWith('/for-sale/reading')
+  })
+
+  it('does not revalidate anything for a draft (never publicly visible)', async () => {
+    getCurrentUser.execute.mockResolvedValue({
+      user: { id: 'user-1', role: 'owner' },
+      identity: {},
+      reissue: false,
+    })
+    updateListing.execute.mockResolvedValue({
+      id: 'listing-1',
+      status: 'draft',
+      slug: 'a-slug',
+      channel: 'sale',
+      town: 'Reading',
+      outcode: 'RG1',
+    })
+    const { PATCH } = await import('@/app/api/v1/listings/[id]/route')
+
+    await PATCH(
+      patchRequest({ channel: 'sale', propertyType: 'flat' }, 'the-cookie'),
+      ctx('listing-1'),
+    )
+
+    expect(revalidatePathMock).not.toHaveBeenCalled()
   })
 
   it('maps ListingNotFoundError to 404', async () => {
