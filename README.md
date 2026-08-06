@@ -14,13 +14,14 @@ Valley** with a handful of partner agencies, before widening coverage. Web
 first (Next.js), with a Flutter app as a phase-2 fast follow. Full product
 detail lives in [`docs/PRD.md`](docs/PRD.md).
 
-This repository has completed **M1 — Listing CRUD + images** and
-**M2 — Search + filters** (see [Delivery status](#delivery-status) below):
-account/auth, lister onboarding, the create-listing wizard, the image
-pipeline, the my-listings dashboard, the Meilisearch-backed search API,
-results UI, area landing pages and the public listing detail page are all
-built and tested. The map view, favourites/saved searches, enquiries,
-admin and email are not built yet — don't go looking for them.
+This repository has completed **M1 — Listing CRUD + images**,
+**M2 — Search + filters** and **M3 — Map view** (see [Delivery
+status](#delivery-status) below): account/auth, lister onboarding, the
+create-listing wizard, the image pipeline, the my-listings dashboard, the
+Meilisearch-backed search API, results UI, area landing pages, the public
+listing detail page and the clustered map view are all built and tested.
+Favourites/saved searches, enquiries, admin and email are not built yet —
+don't go looking for them.
 
 ## Delivery status
 
@@ -118,7 +119,78 @@ Full milestone plan: [`docs/PRD.md` §13](docs/PRD.md#13-milestones-and-delivery
     `:clean`) plus `pnpm bench:search`, built for PRD §13's M2 exit
     criterion ("seeded 5k listings; p75 search under 500 ms") — see
     [Search](#search) below for how to run them.
-- **M3 (map view) through M6 (hardening + launch)** — not started.
+- **M3 — Map view.** Done. Buyers/renters can flip `/for-sale` and
+  `/to-rent` (and their `/search` and `/{area}` tiers) between list and
+  map without a second query path — the map renders the exact
+  `PublicSearchResult` the list column already fetched
+  (`components/features/search/map/map-view.tsx`, `geojson.ts`):
+  - **Provider boundary** — `MapAdapter`
+    (`components/features/search/map/map-adapter.ts`) is a small,
+    presentation-layer port (deliberately outside `src/ports/`, since it
+    carries no domain/service logic) that `MapLibreAdapter` and
+    `MapboxAdapter` both implement over a shared `gl-map-adapter.ts` core.
+    MapLibre GL JS + OpenFreeMap's "liberty" tiles are the default;
+    Mapbox GL JS swaps in behind the identical component boundary only
+    when `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` is set
+    (`create-map-adapter.ts`) — the exact cost lever PRD §14/§15 name.
+    No token is provisioned anywhere yet, so the Mapbox path is
+    code-complete and unit-tested against a mocked `mapbox-gl`, not
+    integration-tested. See ADR-0009.
+  - **Clustering and pins** — clustered client-side via each GL library's
+    own `cluster: true` GeoJSON source option (Supercluster under the
+    hood), rendered as HTML markers (price-pill pins, count-badge
+    clusters) rather than a raster symbol layer, so the existing design
+    tokens apply directly (`pin-marker.ts`, `cluster-marker.ts`,
+    `globals.css`'s `--pin-*`/`--cluster-*` tokens).
+  - **Bbox search-as-you-move** — a real checkbox, default **off**
+    (`use-search-as-you-move.ts`); off, a "Search this area" pill appears
+    after any user-initiated pan/zoom; on, a `moveend` debounces 400 ms
+    then requeries automatically. Either path replaces `lat`/`lng`/
+    `radius` with the four `bboxNe*`/`bboxSw*` params and resets `page`
+    (`applyBboxSearch`, `lib/search-url.ts`, extended in place rather than
+    forked) — the same URL-state module M2 built, still the one source of
+    truth.
+  - **Mini cards** — a native map-library popup on desktop (§2.4), a
+    docked bottom panel on mobile (§3.3); both render the same condensed
+    `ResultCard` fields, dismissed by `[×]`, `Escape`, outside-click, or
+    selecting another pin.
+  - **Mobile toggle** — a single floating pill, not a segmented control:
+    "Map" while viewing the list, "List ({n})" while viewing the map
+    (`mobile-map-toggle-pill.tsx`, `map-view.tsx`); full-screen either
+    way, per PRD §6.1 SRCH-5.
+  - **Accessibility (PRD §7.3)** — the result list is the accessible
+    path; individual pins/clusters and the base canvas are
+    `aria-hidden`, never a tab stop — every pin's information is already
+    on the list card it duplicates, so this costs nothing (`pin-marker.ts`,
+    `cluster-marker.ts`, `gl-map-adapter.ts`). Reduced-motion is handled
+    explicitly for the one motion primitive CSS can't reach: MapLibre/
+    Mapbox's own `flyTo` animation loop, branched to `jumpTo` behind
+    `matchMedia('(prefers-reduced-motion: reduce)')`
+    (`camera-motion.ts`) — the global CSS rule only zeroes
+    transition/animation durations, so this needed its own JS check.
+  - **Code-split, lazy-loaded, list bundle untouched** — `MapView` (and
+    everything it imports: both GL libraries) is only ever reached via
+    `next/dynamic(..., { ssr: false })` from `results-view.tsx`, fetched
+    once `view=map` actually renders. `pnpm assert:map-bundle-isolation`
+    (`scripts/assert-map-bundle-isolation.ts`) reads each list route's
+    real App Router client-reference manifest after `next build` and
+    fails CI if any list-route chunk contains `maplibre-gl`/`mapbox-gl` —
+    a structural PRD §7.1 check, not a bundle-size number eyeballed by
+    hand. Wired into `.github/workflows/ci.yml`'s `build` job.
+  - **Feature-flagged** — `NEXT_PUBLIC_FEATURE_MAP` is a kill switch
+    (`lib/feature-flags.ts`, default enabled), gating both the toggle's
+    render and whether an inbound `?view=map` link is honoured.
+  - **Parity, proven end to end** — `tests/e2e/m3.parity.spec.ts` (real
+    backend, `RUN_LOCAL_STACK_E2E=1`) drives the same three criteria sets
+    through the list and the map and asserts identical listing-slug sets,
+    plus one real drag-driven bbox-requery journey; `tests/e2e/
+m3.smoke.spec.ts` (CI, no live stack) proves the map shell never crashes
+    and is axe-clean on desktop and mobile.
+  - **Deferred, not forgotten** — the M2 §5.6-reserved detail-page
+    single-property map slot (the M3 design spec's own closing appendix)
+    is not built this milestone; the `MediaPlaceholder` on `/property/
+{slug}` is unchanged. Tracked as a follow-up, not silently dropped.
+- **M4 (Engagement) through M6 (hardening + launch)** — not started.
 
 ## Stack
 
@@ -132,7 +204,7 @@ Full milestone plan: [`docs/PRD.md` §13](docs/PRD.md#13-milestones-and-delivery
 | ORM / migrations | Drizzle ORM + drizzle-kit                                                                                                                                                                                                                       |
 | Search           | Meilisearch Cloud, EU region — wired M2: index + settings, transactional-outbox sync, nightly reindex, public search API (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and ADR-0003/0005/0008)                                            |
 | File storage     | Firebase Storage, behind an `ImageStorage` port (wired M1: signed uploads, sharp variants, EXIF strip, blurhash, download-token URLs)                                                                                                           |
-| Maps + geocoding | postcodes.io UK postcode fast-path (wired M1) and free-text place search (wired M2, `GET /api/v1/geocode?q=`) — Mapbox when `MAPBOX_ACCESS_TOKEN` is set, else postcodes.io's own Places API (ADR-0007); Mapbox GL JS for the map view lands M3 |
+| Maps + geocoding | postcodes.io UK postcode fast-path (wired M1) and free-text place search (wired M2, `GET /api/v1/geocode?q=`) — Mapbox when `MAPBOX_ACCESS_TOKEN` is set, else postcodes.io's own Places API (ADR-0007). Map view (wired M3): MapLibre GL JS + OpenFreeMap tiles by default, Mapbox GL JS when `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` is set, behind the same `MapAdapter` component boundary (ADR-0009) |
 | Email            | Resend + React Email (wired from M4, or earlier for auth emails)                                                                                                                                                                                |
 | Rate limiting    | Upstash Redis (wired from M4)                                                                                                                                                                                                                   |
 | Testing          | Vitest 4 (node + integration + jsdom projects) + Playwright + axe                                                                                                                                                                               |
@@ -209,8 +281,9 @@ first — `pnpm dev` will start without them, but sign-up/sign-in and
 
 Copy [`.env.example`](.env.example) to `.env.local` and fill it in. Every
 variable the app reads today is listed below; nothing here is invented —
-Meilisearch and Mapbox are wired as of M2 (below); Resend and Upstash
-still have no env vars because nothing calls them until M4 (see
+Meilisearch and Mapbox geocoding are wired as of M2, the map view's own
+variables as of M3 (both below); Resend and Upstash still have no env
+vars because nothing calls them until M4 (see
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#8-what-m0-deliberately-stubs)).
 
 | Variable                                             | Required                  | Where it comes from                                                               | Notes                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -232,7 +305,9 @@ still have no env vars because nothing calls them until M4 (see
 | `MEILISEARCH_API_KEY`                                | No                        | Meilisearch Cloud project's master/API key                                        | Omit for a local daemon running with no `--master-key`                                                                                                                                                                                                                                                                                                                                            |
 | `MEILISEARCH_INDEX_PREFIX`                           | No                        | You choose                                                                        | Namespaces the index this adapter reads/writes (`{prefix}-listings`) — defaults to `doorstep`. Only needs setting to run more than one environment (dev, CI, a preview deploy) against the same Meilisearch instance without their documents colliding                                                                                                                                            |
 | `TEST_MEILISEARCH_HOST` / `TEST_MEILISEARCH_API_KEY` | No                        | Same as above, a daemon you're okay creating disposable indexes on                | Set only to run `tests/integration/meilisearch-adapter.test.ts` against a real daemon — every other suite skips cleanly without them. Each run creates its own disposable, randomly named index and deletes it again in `afterAll`                                                                                                                                                                |
-| `MAPBOX_ACCESS_TOKEN`                                | No                        | [account.mapbox.com](https://account.mapbox.com/) → a public token (`pk.*`)       | Optional: when set, `lib/composition.ts` wires `MapboxGeocoder` as the free-text place-search provider (GB-biased); when unset, `adapters/postcodesio/`'s own free, keyless Places API (OS Open Names GB) is used instead — see ADR-0007 for why this is a documented deviation from the PRD's Mapbox-only framing, not an oversight. Not provisioned in this project's local/CI environments yet |
+| `MAPBOX_ACCESS_TOKEN`                                | No                        | [account.mapbox.com](https://account.mapbox.com/) → a public token (`pk.*`)       | Optional: when set, `lib/composition.ts` wires `MapboxGeocoder` as the free-text place-search provider (GB-biased); when unset, `adapters/postcodesio/`'s own free, keyless Places API (OS Open Names GB) is used instead — see ADR-0007 for why this is a documented deviation from the PRD's Mapbox-only framing, not an oversight. Not provisioned in this project's local/CI environments yet. Distinct from `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` below — this one is the server-side Geocoding API token, unrelated to the map view itself |
+| `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN`                    | No                        | Same place as above — a public token (`pk.*`) is sufficient                       | Optional, wired M3 (`src/components/features/search/map/mapbox-adapter.ts`, ADR-0009): when set, the map view renders with Mapbox GL JS + `mapbox://styles/mapbox/light-v11` instead of the MapLibre/OpenFreeMap default. `NEXT_PUBLIC_` because Mapbox GL JS runs client-side and needs the token in the browser bundle. Unset (the default, and true of every environment today): the map view uses MapLibre GL JS + OpenFreeMap's free "liberty" tiles — the exact fallback PRD §14/§15 name as the cost lever if Mapbox pricing ever bites. The Mapbox path is code-complete and unit-tested behind the `MapAdapter` seam (a mocked `mapbox-gl`) but not integration-tested, since nothing exists to point one at yet |
+| `NEXT_PUBLIC_FEATURE_MAP`                            | No                        | You choose                                                                         | Kill switch for the map view (`src/lib/feature-flags.ts`, PRD §8.8's "feature flags for risky surfaces"), wired M3. Enabled unless set to the literal string `"false"` — unset (the default) and `"true"` both mean enabled. Gates both the `[ Map ]`/`[ List ]` toggle's render and whether an inbound `?view=map` link is honoured, so turning it off also stops an old shared link from mounting a misbehaving map, not just hiding the discovery button. Inlined at build time, like every other `NEXT_PUBLIC_*` var |
 | `CRON_SECRET`                                        | Yes (for the cron routes) | You choose, e.g. `openssl rand -hex 32`                                           | Authorises `app/api/cron/outbox-drain` and `app/api/cron/reindex` (`src/lib/verify-cron-request.ts`, PRD §8.6). Vercel attaches `Authorization: Bearer ${CRON_SECRET}` automatically to its own scheduled requests once this is set on the project; both routes reject every request with a 401 while it's unset                                                                                  |
 
 Never commit real values for any of the secret-marked variables above — only
@@ -346,7 +421,9 @@ console steps above](#firebase-dev--preview--prod) — unset
 Mapbox (`MAPBOX_ACCESS_TOKEN`) is optional at any environment — see the
 [environment variables table](#environment-variables) and ADR-0007 for
 why an unset token is a supported permanent choice, not a placeholder to
-fill in later.
+fill in later. `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` (the separate, unrelated
+map-view token) is equally optional, for the same kind of reason — see
+ADR-0009.
 
 ### Which of these does M0 actually need?
 
@@ -491,8 +568,13 @@ domain/services/adapters (`tests/unit`, excluding components), `integration`
 for `tests/integration`, and `dom` (jsdom) for anything under
 `tests/unit/components` that renders a component.
 
-- **Unit** — `pnpm test:unit`. No external services. 1,559+ tests today
-  covering domain, services, adapters (with fakes/mocks) and components.
+- **Unit** — `pnpm test:unit`. No external services. 1,700+ tests today
+  covering domain, services, adapters (with fakes/mocks) and components,
+  including the M3 map adapters (`tests/unit/components/features/search/
+map/`) — `createMapLibreAdapter`/`createMapboxAdapter` each exercised
+  against a mocked GL library behind the shared `MapAdapter` seam, so the
+  Mapbox branch is genuinely covered even with no token or network call
+  involved.
 - **Integration** — `pnpm test:integration`. The Drizzle-backed suites need
   `TEST_DATABASE_URL` pointing at a real Postgres+PostGIS instance and skip
   cleanly when unset — there's no Docker and no local database on a typical
@@ -530,7 +612,31 @@ mapbox-geocoder.test.ts` needs a real `MAPBOX_ACCESS_TOKEN` (unset in
   account on the target Firebase project, and `BASE_URL` to an environment
   wired to real Postgres and Storage, to run the full owner journey (sign
   in, onboard, wizard, a real photo upload, submit) end to end. Skipped
-  everywhere else, including CI.
+  everywhere else, including CI. `tests/e2e/m3.smoke.spec.ts` is the M3
+  analogue of `m1`/`m2.smoke.spec.ts` — no local stack needed, runs in
+  CI on every push, and proves `?view=map` never crashes (with or
+  without live tiles), the `[ Map ]`/`[ List ]` toggle actually switches
+  the rendered surface and the URL together, and the map shell is
+  axe-clean on desktop and mobile. `tests/e2e/m3.parity.spec.ts` is the
+  further-gated exception for this milestone: set `RUN_LOCAL_STACK_E2E=1`
+  against the same seeded local stack `m2.search-journey.spec.ts` needs,
+  and it proves PRD §13's M3 exit criterion for real — the same three
+  criteria sets (channel-only, channel+price+beds, a bbox) return
+  identical listing-slug sets from the list and the map — plus one real
+  drag-driven bbox-requery journey. Skipped everywhere else, including
+  CI, for the same "needs a live seeded index" reason `m2`'s own
+  further-gated suite is.
+- **Map bundle isolation** — `pnpm build && pnpm assert:map-bundle-isolation`
+  (`scripts/assert-map-bundle-isolation.ts`) is the structural half of
+  PRD §7.1/§13's M3 exit criterion ("list route bundle unchanged by map
+  work"): it reads each list-tier route's real App Router client
+  reference manifest out of the just-built `.next` output and fails if
+  any of its referenced chunks contain `maplibre-gl`/`mapbox-gl`,
+  confirming the `next/dynamic(..., { ssr: false })` boundary in
+  `results-view.tsx` actually keeps the map bundle out of the list
+  route's initial payload — not just that it's supposed to. Wired into
+  `.github/workflows/ci.yml`'s `build` job, right after `next build`,
+  reusing that job's own output rather than building twice.
 
 **Unit, integration and e2e all run to completion in CI** on every push and
 pull request to `main` — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml),

@@ -1,6 +1,6 @@
 # Doorstep — Architecture
 
-Status: living document, canonical as of M2 (Search + filters). Update
+Status: living document, canonical as of M3 (Map view). Update
 it whenever a boundary, port, or infrastructure decision changes; do not let
 it drift from the code. Source of requirements: `docs/PRD.md` (referenced by
 section below).
@@ -17,12 +17,17 @@ Redis, Cloudflare Turnstile). PRD §8.1 is the canonical stack table; this
 document explains _why the code is organised the way it is_ and _how the
 pieces talk to each other_.
 
-The system diagram below adapts PRD §8.2 with M0–M2 status: email and
+The system diagram below adapts PRD §8.2 with M0–M3 status: email and
 rate-limiting still exist only as ports with placeholder scaffolds; image
 storage, geocoding (both the postcode fast path and free-text place
 search) and search (Meilisearch, the outbox drain and nightly reindex
 crons) are real as of M1/M2 — see §8 "What M0 deliberately stubs" for the
-capability-by-capability table.
+capability-by-capability table. The map view (§18, M3) does not appear
+as its own node below: it introduces no new *server-side* integration —
+the browser fetches basemap tiles (OpenFreeMap by default, Mapbox GL's
+own tile CDN when configured) directly, never proxied through `N`, so
+the diagram's existing `MB` node (Mapbox's Geocoding API, an unrelated
+product) is not where the map view's Mapbox usage would show up either.
 
 ```mermaid
 flowchart LR
@@ -43,7 +48,7 @@ flowchart LR
     A[Auth]
     S[Storage\nlisting images — real adapter as of M1]
   end
-  MB[Mapbox Geocoding — real when MAPBOX_ACCESS_TOKEN set, else\npostcodes.io Places fallback, ADR-0007; Mapbox GL map view lands M3]
+  MB[Mapbox Geocoding — real when MAPBOX_ACCESS_TOKEN set, else\npostcodes.io Places fallback, ADR-0007]
   PIO[postcodes.io — real adapter as of M1 postcode fast path,\nM2 free-text place-search fallback]
   RE[Resend email — stub adapter, lands M4]
   SEN[Sentry]
@@ -68,7 +73,9 @@ M0 did not stand up Mapbox, postcodes.io, Stripe or Turnstile integrations;
 M1 wired postcodes.io for the postcode fast path (§12) and Firebase Storage
 for the image pipeline (§11); M2 wired Meilisearch, the outbox drain and
 nightly reindex crons (§13–§15), the public search API (§16) and free-text
-place search plus its 30-day cache (§17). Stripe and Turnstile still land
+place search plus its 30-day cache (§17); M3 wired the map view (§18) —
+client-side only, reusing M2's search API and URL-state module rather than
+adding a server integration of its own. Stripe and Turnstile still land
 in M4–M6 alongside the features that need them (PRD §13).
 
 ---
@@ -376,7 +383,7 @@ new routes belong and which are candidates for the composition root's
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Home                                                       | ISR, revalidated daily or on demand                                                                                       | Placeholder shell only                                                                                                                                                                                                                                                                                                                                                   |
 | Area landing pages (`/for-sale/{area}`, `/to-rent/{area}`) | ISR, revalidated daily or on demand (PRD §8.3 target — **not met as of M2**, see §16)                                     | Built M2 (§16) as a fully dynamic route, not ISR: it reads `searchParams` to support filtered visits (`/for-sale/reading?minBeds=2`), which Next's classic App Router treats as disqualifying the *whole* route from static generation — confirmed via `pnpm build`'s route table (`ƒ`, not `●`), including the unfiltered canonical URL. A prior version of this file incorrectly claimed the canonical path was ISR-cached; corrected during M2's post-review hardening pass. Closing the gap for real needs Next 16's Cache Components (Partial Prerendering), an app-wide migration out of scope for M2 — tracked as follow-up, not silently dropped |
-| Search results (list and map)                              | Client-driven UI calling `GET /api/v1/search`; shell server-renders with initial results for SEO on crawlable filter URLs | List built M2 (§16): `SearchResultsPage`, URL-state-as-source-of-truth (`lib/search-url.ts`), the results grid re-queries client-side on any filter/sort/page change. Map view is M3                                                                                                                                                                                     |
+| Search results (list and map)                              | Client-driven UI calling `GET /api/v1/search`; shell server-renders with initial results for SEO on crawlable filter URLs | List built M2 (§16): `SearchResultsPage`, URL-state-as-source-of-truth (`lib/search-url.ts`), the results grid re-queries client-side on any filter/sort/page change. Map view built M3 (§18): `MapView`, reached via `next/dynamic(..., { ssr: false })`, renders the identical fetched result set — no second query path                                                    |
 | Listing detail                                             | ISR, on-demand revalidation on publish/edit/status change                                                                 | Built M2 (§16) — `GET /api/v1/properties/{slug}` (public, published/under_offer only) and `/property/{slug}` (`revalidate = 3600` plus the same on-demand `revalidatePath` as area pages, fired from the status/PATCH mutation routes). Gallery lightbox, floorplan/EPC tabs and similar-properties finalise in M4 per PRD §13                                           |
 | Agency pages                                               | ISR, revalidated on agency edits                                                                                          | Not built yet — no public `/agency/{slug}` route exists; M1 only built the _creation_ form (§9), not the public page                                                                                                                                                                                                                                                     |
 | Dashboards (lister, admin), account                        | Dynamic server components, no caching, auth-gated                                                                         | M0 delivered the account shell (sign up/in/out); M1 added the full `/lister` dashboard, the create-listing wizard, and `/onboarding` on the same pattern (§9, §10)                                                                                                                                                                                                       |
@@ -415,7 +422,8 @@ geocoding — four of the six rows below are now real.
 Explicitly, M0 did **not** build: the listing wizard, image pipeline, search
 API, map view, enquiries, or admin queue. M1 built the first two of those
 (§9–§12 below); M2 built the search API, results UI, area pages and public
-detail (§13–§17); map, enquiries and admin remain M3–M5 (PRD §13).
+detail (§13–§17); M3 built the map view (§18); enquiries and admin remain
+M4–M5 (PRD §13).
 M0's job was the foundation those milestones build on: a correctly-bounded
 codebase, a working auth round-trip against real infrastructure, and a
 schema that already has the shape (including PostGIS, the outbox, and
@@ -941,6 +949,176 @@ query; normalisation is a caching concern only.
 
 ---
 
+## 18. Map view: provider boundary, query parity, code-split and camera motion (M3)
+
+PRD §6.1 SRCH-5, §7.1, §7.3, §13's M3 row; M3-DESIGN-SPEC.md. Everything
+in this section lives under `src/components/features/search/map/` — a
+**UI-layer** boundary, deliberately outside `src/ports/` (§3's port list):
+the map has no domain/service logic behind it (no repository, no use
+case), so it doesn't need the DIP machinery the rest of this document's
+ports exist for. The four decisions below are the ones this milestone's
+task brief called out by name; each is a real, load-bearing seam, not
+incidental structure.
+
+**The `MapAdapter` provider boundary — PRD §15's risk-register fallback
+lever, realised in code, not just documented as an option.**
+`map-adapter.ts`'s `MapAdapter` interface (ISP: exactly the surface
+`map-view.tsx` needs — `init`, `setData`, three `on()` event overloads,
+`setHighlightedHit`, `openPopup`/`closePopup`, `destroy`, plus
+`CameraCapableMap`'s `flyTo`/`jumpTo`) is implemented twice:
+`maplibre-adapter.ts` (MapLibre GL JS + OpenFreeMap's "liberty" style,
+the default) and `mapbox-adapter.ts` (Mapbox GL JS +
+`mapbox://styles/mapbox/light-v11`). Both wrap one shared
+`gl-map-adapter.ts` core rather than duplicating marker-sync/
+cluster-click/event-wiring logic per provider — justified structurally,
+not just by convenience: MapLibre is a pre-licence-change fork of Mapbox
+GL JS, so the two libraries' runtime APIs are close enough that a small
+injected `GlLibrary` type (the handful of classes `gl-map-adapter.ts`
+actually touches — `Map`, `Marker`, `Popup`, the two controls) covers
+both real libraries with LSP holding for real, the same discipline
+ADR-0007 already applied to `Geocoder`'s two `PlaceSearcher`
+implementations. `create-map-adapter.ts` is the **only** place the
+choice is made: `createMapAdapter()` reads
+`NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` (`readMapboxAccessToken()`) and
+dynamically imports whichever provider module applies — `map-view.tsx`
+itself only ever calls `createMapAdapter()` and programs against the
+returned `MapAdapter`, never against `maplibregl.Map`/`mapboxgl.Map`
+directly, so no map-library type crosses the component boundary outward.
+This is the exact swap PRD §14/§15 name as the cost lever if Mapbox
+pricing ever bites ("swap Mapbox GL for MapLibre + OpenFreeMap tiles
+behind the existing map component boundary") — realised here as an
+env-var read, not a future refactor. See ADR-0009 for the full
+default-vs-optional reasoning; no `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` is
+provisioned anywhere today, so `mapbox-adapter.ts` is code-complete and
+covered by `tests/unit/components/features/search/map/mapbox-adapter.test.ts`
+(a mocked `mapbox-gl`) but not exercised end-to-end — the same documented
+posture `adapters/mapbox/`'s geocoder adapter already takes (§17), for
+the same reason.
+
+**Single-query-path parity — structural, not a coincidence someone has
+to keep re-verifying.** PRD §13's M3 exit criterion reads "map and list
+return identical results for the same criteria." That holds by
+construction, not by discipline: `results-view.tsx` (§16) is the *only*
+place `GET /api/v1/search` is ever called from this surface — it fetches
+once per URL-state change and holds the result in one `PublicSearchResult`
+state value. `MapView` (`map-view.tsx`) is handed that exact same
+`hits: PublicSearchHit[]` array as a prop; it issues no query of its own.
+`geojson.ts`'s `hitsToFeatureCollection` is the one translation step
+between "the list's own data" and "what the clustered GeoJSON source
+needs" — a thin DTO (`hitId`, a compact `formatPinPrice` label, an
+under-offer flag) built from hits already in memory, never a second,
+fuller data contract the map maintains independently. A bbox requery
+(§1.5's "Search this area" / auto-mode) does not call the map's own
+fetch path either: `map-view.tsx`'s `onBboxSearch` callback bubbles up to
+`results-view.tsx`'s `handleBboxSearch`, which calls `applyBboxSearch`
+(`lib/search-url.ts`, extended in place for M3 — §1.9's bbox params
+reuse `lib/validation/search.ts`'s own API param names verbatim, no
+friendlier public alias invented) and navigates; that URL change is what
+re-fires the *same* fetch effect list view already re-fires on any other
+filter change. There is exactly one code path from "the URL says X" to
+"these are the results," and both the grid and the map render off its
+output — `tests/e2e/m3.parity.spec.ts` proves this holds against a real
+backend (three criteria sets, list vs. map, identical listing-slug sets)
+rather than trusting the architecture diagram alone.
+
+**Code-split strategy and the manifest assertion.** PRD §7.1: "search
+list route ships without [the map bundle]." Mechanism:
+`results-view.tsx` declares `MapView` via
+`dynamic(() => import('.../map-view').then((mod) => mod.MapView), { ssr:
+false, loading: ... })` at module scope (required for `next/dynamic`'s
+own preloading) — this one boundary is what puts `MapView` and
+everything it imports (both adapter modules, and transitively both GL
+libraries) into their own client chunk, fetched only once `view=map`
+actually renders it, regardless of which route imports `ResultsView`.
+`create-map-adapter.ts` adds a second code-split layer *inside* that
+same map chunk: each provider module is imported with a dynamic
+`import()` rather than a static one at the top of the file, so — even
+once a user has opened the map at all — the unused provider's ~200KB+
+library still isn't downloaded. Today that's every real user (no Mapbox
+token exists), so this keeps `mapbox-gl` out of the browser download
+entirely for the common case, not just out of the list route.
+`scripts/assert-map-bundle-isolation.ts` (`pnpm assert:map-bundle-isolation`,
+wired into `.github/workflows/ci.yml`'s `build` job right after `next
+build`, reusing that job's own `.next` output) is the structural proof
+this holds, rather than a bundle-size number eyeballed by hand each
+release: it reads every list-tier route's real App Router client
+reference manifest (`page_client-reference-manifest.js` — the exact file
+Next.js itself uses to decide which client chunks a route's initial
+render needs) and asserts none of the referenced chunks' file contents
+match `/maplibre-gl|mapbox-gl/i` (both libraries' package names survive
+production minification as string literals even with every local
+identifier mangled — confirmed empirically against this repo's own build
+before the assertion was written). It also runs a **positive control**
+first (`assertMapChunkExistsSomewhere`) — scanning every chunk actually
+written to `.next/static/chunks` for a genuine match — so a broken build,
+a renamed manifest file, or a future Next.js version moving where chunk
+references live fails loudly instead of letting the main assertion pass
+vacuously on "found nothing to check." §1.9's SSR note matters here too:
+a request that already carries `?view=map` still server-renders the
+results shell with real first-page data (unchanged from M2's SEO/LCP
+posture, §16) — the map bundle itself is still fetched client-side on
+hydration in that case, so "ships without the map bundle" is a claim
+about the *list* route's own initial JS payload, not about every
+possible URL a crawler could hit.
+
+**Camera motion and the one reduced-motion check CSS can't reach.**
+Every other motion primitive this app uses is a CSS `transition`/
+`animation`, covered globally by `globals.css`'s
+`@media (prefers-reduced-motion: reduce)` rule. MapLibre's and Mapbox's
+own `flyTo`/`jumpTo` camera moves are driven by the map library's
+internal animation loop directly against the canvas — not CSS at all —
+so that global rule silently does not touch them; a design review that
+only checked "does the stylesheet handle reduced motion" would have
+missed this. `camera-motion.ts`'s `moveCamera(map, target, reduceMotion)`
+is the one function every programmatic camera move in this milestone
+goes through (today: exactly one call site, `gl-map-adapter.ts`'s
+cluster-click-zoom via `getClusterExpansionZoom()` — §1.3/§5 are explicit
+that "Search this area" and the auto-requery checkbox never move the
+camera themselves, only the pin/list *contents*, so moving the map out
+from under a user who just moved it themselves never happens) —
+branching to `map.jumpTo(target)` (instant, no animation) when
+`prefersReducedMotion()` reads `matchMedia('(prefers-reduced-motion:
+reduce)').matches` live at call time, or `map.flyTo({ ...target, duration:
+600, easing: easeOutCubicApprox })` otherwise. The 600 ms cap is
+deliberate — `flyTo`'s own distance-based default duration can run long
+on a big jump; `easeOutCubicApprox` (`1 - (1 - t) ** 3`) is the closest
+plain-JS-function shape to `globals.css`'s `--ease-out-expo` token
+achievable here, since MapLibre/Mapbox need a JS easing callback, not a
+CSS `cubic-bezier()` string, so the token itself can't be reused
+directly across that boundary — a documented, narrow exception to "reuse
+the token," not a second motion system.
+
+Two smaller, related decisions worth recording alongside the above,
+since both are accessibility-load-bearing and easy to miss on a casual
+read of the component tree: individual pins and clusters
+(`pin-marker.ts`, `cluster-marker.ts`) are `aria-hidden="true"` with
+`tabIndex = -1`, and the base map canvas itself gets the same treatment
+plus `tabindex="-1"` in `gl-map-adapter.ts`'s `init()` (both GL libraries
+give the canvas a focusable `tabindex="0"` by default, which — left
+alone — is a real, axe-confirmed WCAG 4.1.2 violation once it sits inside
+an `aria-hidden` subtree). This is PRD §7.3's stated design, not an
+accidental gap: the result list is the accessible path (real, focusable
+`<a href="/property/{slug}">` cards, already reachable and already
+complete), every pin's information is fully duplicated there, and
+forcing dozens of pins into sequential keyboard focus on a dense map
+would be a *worse* experience than the one already available — so
+hiding the pin/cluster/canvas layer from the accessibility tree costs a
+keyboard/screen-reader user nothing. `tests/e2e/m3.smoke.spec.ts` axe-
+scans the map shell in CI on every push (no live pins, since that
+environment has no search index); `tests/e2e/m3.parity.spec.ts`
+(`RUN_LOCAL_STACK_E2E=1`) axe-scans it again against real, seeded pins,
+closing the gap the CI-safe suite structurally cannot.
+
+**Deferred:** the M2 §5.6-reserved detail-page single-property map slot
+(the M3 design spec's own closing appendix) was not built this
+milestone — `/property/{slug}`'s `location-section.tsx` still renders
+`MediaPlaceholder` at `aspect-[16/9]` unchanged. Everything the appendix
+would need (the `MapAdapter` boundary, the pin tokens, the basemap
+treatment) already exists; swapping the placeholder for a live single-pin
+map is a small, self-contained follow-up, not a design gap.
+
+---
+
 ## Related documents
 
 - `adr/0001-layered-architecture-with-ports-and-adapters.md`
@@ -951,4 +1129,5 @@ query; normalisation is a caching concern only.
 - `adr/0006-firebase-storage-download-tokens.md`
 - `adr/0007-postcodesio-places-fallback-for-geocoding.md`
 - `adr/0008-clear-then-rebuild-nightly-reindex.md`
+- `adr/0009-maplibre-openfreemap-default-mapbox-optional.md`
 - `PRD.md` — product requirements, source of all constraints cited above
