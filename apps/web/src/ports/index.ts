@@ -41,8 +41,15 @@ export type { Agency, AgencyRepository } from './agency-repository'
 export { AgencySlugConflictError } from './agency-repository'
 export type {
   GeoPoint,
-  SearchDocument,
-  SearchFilters,
+  ListingSearchAgency,
+  ListingSearchDocument,
+  RadiusGeoQuery,
+  BoundingBoxGeoQuery,
+  GeoQuery,
+  SearchQueryFilters,
+  SearchSort,
+  SearchQuery,
+  SearchFacetCounts,
   SearchResult,
   SearchIndex,
 } from './search-index'

@@ -94,11 +94,14 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-      # Scaffold only — PRD §8.8/§M2: nothing in M0 queries Meilisearch yet
-      # (no search mapper or sync exists to test). This container exists so
-      # the integration job's shape doesn't change when that lands; it is
-      # not wired into any test today, so it intentionally has no
-      # healthcheck gating the job on it coming up.
+      # tests/integration/meilisearch-adapter.test.ts (PRD §8.6, M2) now
+      # exercises MeilisearchSearchIndex for real against this container —
+      # gated on TEST_MEILISEARCH_HOST below, same skip-when-absent shape
+      # as TEST_DATABASE_URL for the Postgres suites. Still no healthcheck
+      # gating the job on it coming up: that suite's own beforeAll
+      # (ensureSettings/upsert) is itself the readiness check, the same
+      # way the Postgres suites' own migrate() calls are for the postgres
+      # service above.
       meilisearch:
         image: getmeili/meilisearch:v1.48
         env:
@@ -135,6 +138,11 @@ jobs:
           # adapter" — running against a real Storage API surface in CI
           # from now on, not just the always-on in-memory fake.
           FIREBASE_STORAGE_EMULATOR_HOST: 127.0.0.1:9199
+          # tests/integration/meilisearch-adapter.test.ts (PRD §8.6)
+          # against the meilisearch service container above — same
+          # not-a-secret master key that container is started with.
+          TEST_MEILISEARCH_HOST: http://localhost:7700
+          TEST_MEILISEARCH_API_KEY: ci-scaffold-master-key-not-a-secret
         # firebase.json/storage.rules live at the repo root (this job's
         # cwd — see firebase-storage-adapter.ts's header comment for why
         # there rather than apps/web/), so this runs from the root, using

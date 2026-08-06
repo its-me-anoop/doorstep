@@ -30,6 +30,7 @@
     "firebase": "^12.17.0",
     "firebase-admin": "^14.2.0",
     "lucide-react": "^1.28.0",
+    "meilisearch": "^0.60.0",
     "next": "16.2.12",
     "postgres": "^3.4.9",
     "react": "19.2.4",
