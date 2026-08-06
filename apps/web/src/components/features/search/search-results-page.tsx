@@ -6,6 +6,7 @@ import { Breadcrumb } from '@/components/features/search/breadcrumb'
 import { ResultsView } from '@/components/features/search/results-view'
 import { areaMatchToFilter, type AreaDefinition } from '@/lib/areas'
 import { createServices } from '@/lib/composition'
+import { isMapFeatureEnabled } from '@/lib/feature-flags'
 import type { SearchHeadingTier } from '@/lib/search-heading'
 import { fetchInitialSearchResult } from '@/lib/server-search'
 import {
@@ -107,6 +108,13 @@ export async function SearchResultsPage({
   }
 
   const state = parseSearchUrlState(rawParams)
+  // M3-DESIGN-SPEC.md §3.2: the breadcrumb (the one piece of "everything
+  // else" chrome that lives outside ResultsView) hides on mobile while
+  // full-screen map mode is active — computed independently here from
+  // the same URL, matching how `state` itself is already derived
+  // separately in both this server component and the client
+  // `ResultsView`, rather than threaded down as a prop.
+  const isMapView = isMapFeatureEnabled() && state.view === 'map'
   const areaFilter = area ? areaMatchToFilter(area.match) : undefined
   const { search, listings } = createServices()
   const initialResult = await fetchInitialSearchResult(
@@ -165,18 +173,20 @@ export async function SearchResultsPage({
       {prevHref && <link rel="prev" href={prevHref} />}
       {nextHref && <link rel="next" href={nextHref} />}
 
-      <Breadcrumb
-        items={[
-          { label: 'Home', href: '/' },
-          hasThirdCrumb
-            ? {
-                label: CHANNEL_CRUMB_LABEL[channel],
-                href: `/${CHANNEL_SLUG[channel]}`,
-              }
-            : { label: CHANNEL_CRUMB_LABEL[channel] },
-          ...(hasThirdCrumb ? [{ label: finalCrumbLabel }] : []),
-        ]}
-      />
+      <div className={isMapView ? 'hidden lg:block' : undefined}>
+        <Breadcrumb
+          items={[
+            { label: 'Home', href: '/' },
+            hasThirdCrumb
+              ? {
+                  label: CHANNEL_CRUMB_LABEL[channel],
+                  href: `/${CHANNEL_SLUG[channel]}`,
+                }
+              : { label: CHANNEL_CRUMB_LABEL[channel] },
+            ...(hasThirdCrumb ? [{ label: finalCrumbLabel }] : []),
+          ]}
+        />
+      </div>
 
       <div className="mt-6">
         <ResultsView
@@ -188,6 +198,8 @@ export async function SearchResultsPage({
           now={now}
           areaFilter={areaFilter}
           areaLabel={area?.label}
+          areaCentre={area?.centre}
+          areaRadiusMiles={area?.radiusMiles}
           areaSection={
             showAreaSection && area ? (
               <AreaIntro

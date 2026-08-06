@@ -165,4 +165,53 @@ describe('SearchResultsPage (area tier)', () => {
     expect(serialise(result)).toContain('[Function: AreaIntro]')
     expect(serialise(result)).toContain('newest: []')
   })
+
+  // M3-DESIGN-SPEC.md §1.9's "the M3 map default" — `lib/areas.ts`'s
+  // `centre`/`radiusMiles` fields, reserved since M2 for exactly this.
+  it("passes the area's centre/radiusMiles through to ResultsView as the map's initial camera source", async () => {
+    const { SearchResultsPage } =
+      await import('@/components/features/search/search-results-page')
+
+    const result = await SearchResultsPage({
+      channel: 'sale',
+      tier: 'area',
+      rawSearchParams: {},
+      area: readingArea,
+    })
+
+    const serialised = serialise(result)
+    expect(serialised).toContain('areaCentre: { lat: 51.4543, lng: -0.9781 }')
+    expect(serialised).toContain('areaRadiusMiles: 3')
+  })
+
+  // §3.2: the breadcrumb — the one piece of "everything else" chrome
+  // living outside ResultsView itself — also hides on mobile once
+  // full-screen map mode is active.
+  it('wraps the breadcrumb so it hides on mobile (not desktop) once view=map is active', async () => {
+    const { SearchResultsPage } =
+      await import('@/components/features/search/search-results-page')
+
+    const result = await SearchResultsPage({
+      channel: 'sale',
+      tier: 'area',
+      rawSearchParams: { view: 'map' },
+      area: readingArea,
+    })
+
+    expect(serialise(result)).toContain("className: 'hidden lg:block'")
+  })
+
+  it('does not hide the breadcrumb when map view is not active', async () => {
+    const { SearchResultsPage } =
+      await import('@/components/features/search/search-results-page')
+
+    const result = await SearchResultsPage({
+      channel: 'sale',
+      tier: 'area',
+      rawSearchParams: {},
+      area: readingArea,
+    })
+
+    expect(serialise(result)).not.toContain("className: 'hidden lg:block'")
+  })
 })

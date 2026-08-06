@@ -63,6 +63,37 @@ export interface SearchUrlState {
   /** Human-readable place text for heading/breadcrumb copy — display-only,
    * never sent to the search API (`buildSearchApiQuery` drops it). */
   label?: string
+  /** M3-DESIGN-SPEC.md §1.9. Only `'map'` is ever written — list is the
+   * default and is always omitted, the same canonicalisation rule as
+   * `sort=newest`/`page=1`: a URL with `view=list` (or any other value)
+   * present is non-canonical and redirects to drop it. */
+  view?: 'map'
+  /** The map viewport's four corners (§1.9) — reuses the API's own param
+   * names verbatim (`lib/validation/search.ts`) rather than inventing
+   * friendlier public names, since there's no clearer public name for a
+   * map corner than its own lat/lng. All four together or none, the same
+   * "must be paired" leniency §1.7 already applies to `lat`/`lng`.
+   * Mutually exclusive with `lat`/`lng`/`radius` — both `parseSearchUrlState`
+   * and `searchUrlStateToSearchParams` enforce that a bbox always wins
+   * (§1.9: "setting a bbox... drops any existing lat/lng/radius"), so a
+   * `SearchUrlState` never carries both after passing through either. */
+  bboxNeLat?: number
+  bboxNeLng?: number
+  bboxSwLat?: number
+  bboxSwLng?: number
+}
+
+/** The four corners of a map viewport, in the shape §1.5's "Search this
+ * area"/search-as-I-move actions produce from the live map (as opposed to
+ * `SearchUrlState`'s flat `bboxNeLat`/... fields, which are the URL/API
+ * wire shape) — kept as its own small type so `applyBboxSearch`'s
+ * signature reads as "here's a viewport," not "here are four
+ * independent floats that happen to be related." */
+export interface MapBoundingBox {
+  neLat: number
+  neLng: number
+  swLat: number
+  swLng: number
 }
 
 const PROPERTY_TYPE_VALUES = new Set<string>(PROPERTY_TYPE.options)
@@ -146,20 +177,45 @@ export function parseSearchUrlState(
   const page = parseIntParam(searchParams.get('page'))
   if (page !== undefined && page > 1) state.page = page
 
+  // §1.9: a bbox (all four corners) always wins over a point-radius
+  // search — parsed first so the lat/lng/radius block below can check
+  // `hasBbox` and never set both on the same state.
+  const bboxNeLat = parseFloatParam(searchParams.get('bboxNeLat'))
+  const bboxNeLng = parseFloatParam(searchParams.get('bboxNeLng'))
+  const bboxSwLat = parseFloatParam(searchParams.get('bboxSwLat'))
+  const bboxSwLng = parseFloatParam(searchParams.get('bboxSwLng'))
+  const hasBbox =
+    bboxNeLat !== undefined &&
+    bboxNeLng !== undefined &&
+    bboxSwLat !== undefined &&
+    bboxSwLng !== undefined
+  if (hasBbox) {
+    state.bboxNeLat = bboxNeLat
+    state.bboxNeLng = bboxNeLng
+    state.bboxSwLat = bboxSwLat
+    state.bboxSwLng = bboxSwLng
+  }
+
   const lat = parseFloatParam(searchParams.get('lat'))
   const lng = parseFloatParam(searchParams.get('lng'))
-  if (lat !== undefined && lng !== undefined) {
+  if (!hasBbox && lat !== undefined && lng !== undefined) {
     state.lat = lat
     state.lng = lng
   }
 
   const radius = parseIntParam(searchParams.get('radius'))
-  if (radius !== undefined && SEARCH_RADIUS_MILES_OPTIONS.includes(radius)) {
+  if (
+    !hasBbox &&
+    radius !== undefined &&
+    SEARCH_RADIUS_MILES_OPTIONS.includes(radius)
+  ) {
     state.radius = radius
   }
 
   const label = searchParams.get('label')
   if (label) state.label = label
+
+  if (searchParams.get('view') === 'map') state.view = 'map'
 
   return state
 }
@@ -201,15 +257,34 @@ export function searchUrlStateToSearchParams(
   if (state.page !== undefined && state.page > 1) {
     params.set('page', String(state.page))
   }
-  if (state.lat !== undefined && state.lng !== undefined) {
+  const hasBbox =
+    state.bboxNeLat !== undefined &&
+    state.bboxNeLng !== undefined &&
+    state.bboxSwLat !== undefined &&
+    state.bboxSwLng !== undefined
+
+  // §1.9: mutually exclusive with a bbox — enforced defensively here too
+  // (not just trusted from `parseSearchUrlState`'s own invariant), so this
+  // function is self-correcting for any hand-built state that happens to
+  // carry both.
+  if (!hasBbox && state.lat !== undefined && state.lng !== undefined) {
     params.set('lat', String(state.lat))
     params.set('lng', String(state.lng))
   }
-  if (state.radius !== undefined) {
+  if (!hasBbox && state.radius !== undefined) {
     params.set('radius', String(state.radius))
   }
   if (state.label) {
     params.set('label', state.label)
+  }
+  if (state.view === 'map') {
+    params.set('view', 'map')
+  }
+  if (hasBbox) {
+    params.set('bboxNeLat', String(state.bboxNeLat))
+    params.set('bboxNeLng', String(state.bboxNeLng))
+    params.set('bboxSwLat', String(state.bboxSwLat))
+    params.set('bboxSwLng', String(state.bboxSwLng))
   }
 
   return params
@@ -317,7 +392,23 @@ export function buildSearchApiQuery(
   if (state.sort) query.sort = state.sort
   if (state.page !== undefined) query.page = String(state.page)
 
-  if (state.lat !== undefined && state.lng !== undefined) {
+  // §1.9: a bbox always wins — `lat`/`lng`/`radius` are never forwarded
+  // alongside one, even if a caller's state happens to carry both,
+  // guaranteeing the API's own "a radius search or a bbox, not both"
+  // 400 (`lib/validation/search.ts`) is unreachable through this
+  // translation layer. `view` never reaches the API at all — it's a UI
+  // lens, not a search filter.
+  if (
+    state.bboxNeLat !== undefined &&
+    state.bboxNeLng !== undefined &&
+    state.bboxSwLat !== undefined &&
+    state.bboxSwLng !== undefined
+  ) {
+    query.bboxNeLat = String(state.bboxNeLat)
+    query.bboxNeLng = String(state.bboxNeLng)
+    query.bboxSwLat = String(state.bboxSwLat)
+    query.bboxSwLng = String(state.bboxSwLng)
+  } else if (state.lat !== undefined && state.lng !== undefined) {
     query.lat = String(state.lat)
     query.lng = String(state.lng)
     if (state.radius !== undefined) {
@@ -329,12 +420,46 @@ export function buildSearchApiQuery(
 }
 
 /**
+ * §1.5's bbox requery action (manual "Search this area," or a debounced
+ * auto-mode `moveend`): replaces any existing `lat`/`lng`/`radius` with
+ * the four bbox corners and resets `page` to 1 (omitted) — mirroring the
+ * channel-toggle precedent (§3.2: "a filtered page 4... has no
+ * meaningful equivalent") applied here to a changed geo constraint
+ * rather than a changed channel. Every other field — filters, sort,
+ * `view`, `label` — is preserved untouched: a bbox requery narrows
+ * *where*, not *what*, and §1.5 is explicit that the breadcrumb/`<h1>`
+ * (built from `label`) keep describing how the user arrived, unchanged.
+ */
+export function applyBboxSearch(
+  state: SearchUrlState,
+  bbox: MapBoundingBox,
+): SearchUrlState {
+  return {
+    ...state,
+    lat: undefined,
+    lng: undefined,
+    radius: undefined,
+    bboxNeLat: bbox.neLat,
+    bboxNeLng: bbox.neLng,
+    bboxSwLat: bbox.swLat,
+    bboxSwLng: bbox.swLng,
+    page: undefined,
+  }
+}
+
+/**
  * The channel-toggle reset rule (§1.2, stated precisely in §3.2):
  * **preserved** — location (lat/lng/radius/label), minBeds/maxBeds, type,
  * sort. **Reset to default** — minPrice/maxPrice (a sale price has no
  * honest rent equivalent) and page (a filtered page 4 on Buy has no
  * meaningful equivalent on Rent). **Dropped entirely** — furnished,
  * availableFrom (channel-specific, meaningless on the other channel).
+ *
+ * M3 extension (M3-DESIGN-SPEC.md §1.9): `view` and the bbox corners are
+ * also preserved. `view` is a channel-independent UI lens (whether
+ * you're looking at a map has nothing to do with Buy vs Rent); a bbox is
+ * a location constraint exactly like lat/lng/radius, already preserved
+ * above for the same reason.
  */
 /** Converts a Next.js page's resolved `searchParams` prop (a plain
  * object, possibly with `string[]` values for a repeated key) into a
@@ -366,6 +491,11 @@ export function resetStateForChannelSwitch(
   if (state.maxBeds !== undefined) preserved.maxBeds = state.maxBeds
   if (state.type !== undefined) preserved.type = state.type
   if (state.sort !== undefined) preserved.sort = state.sort
+  if (state.view !== undefined) preserved.view = state.view
+  if (state.bboxNeLat !== undefined) preserved.bboxNeLat = state.bboxNeLat
+  if (state.bboxNeLng !== undefined) preserved.bboxNeLng = state.bboxNeLng
+  if (state.bboxSwLat !== undefined) preserved.bboxSwLat = state.bboxSwLat
+  if (state.bboxSwLng !== undefined) preserved.bboxSwLng = state.bboxSwLng
   return preserved
 }
 

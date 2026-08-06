@@ -19,6 +19,38 @@ vi.mock('@/lib/search-client', async () => {
   }
 })
 
+// M3: MapView itself (marker sync, popups, the real map libraries) is
+// exhaustively covered by map-view.test.tsx — this file only needs to
+// verify results-view.tsx's own wiring into it (props, the bbox→URL
+// handler), so a thin stub stands in for the real (dynamically
+// imported) component.
+vi.mock('@/components/features/search/map/map-view', () => ({
+  MapView: (props: {
+    totalCount: number
+    onBboxSearch: (bbox: {
+      neLat: number
+      neLng: number
+      swLat: number
+      swLng: number
+    }) => void
+  }) => (
+    <div data-testid="map-view" data-total-count={props.totalCount}>
+      <button
+        onClick={() =>
+          props.onBboxSearch({
+            neLat: 51.5,
+            neLng: -0.9,
+            swLat: 51.4,
+            swLng: -1.0,
+          })
+        }
+      >
+        trigger-bbox-search
+      </button>
+    </div>
+  ),
+}))
+
 import { ResultsView } from '@/components/features/search/results-view'
 import { SearchApiError } from '@/lib/search-client'
 import type { PublicSearchResult } from '@/services/search/search-listings'
@@ -265,5 +297,133 @@ describe('ResultsView', () => {
     expect(
       screen.getByText('Nothing matches those filters yet.'),
     ).toBeInTheDocument()
+  })
+
+  // M3-DESIGN-SPEC.md §2/§0 — the map toggle and its feature flag.
+  describe('map view', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs()
+      vi.unstubAllGlobals()
+    })
+
+    it('renders the [Map] toggle by default (flag enabled) and navigates to view=map on click', () => {
+      render(
+        <ResultsView
+          channel="sale"
+          basePath="/for-sale"
+          tier="unrestricted"
+          initialResult={baseResult()}
+          unfilteredHref="/for-sale"
+          now={1000}
+        />,
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Map' }))
+      expect(replaceMock).toHaveBeenCalledTimes(1)
+      const href = replaceMock.mock.calls[0][0] as string
+      expect(href).toContain('view=map')
+    })
+
+    it('hides the toggle entirely when the feature flag is off (kill switch)', () => {
+      vi.stubEnv('NEXT_PUBLIC_FEATURE_MAP', 'false')
+      render(
+        <ResultsView
+          channel="sale"
+          basePath="/for-sale"
+          tier="unrestricted"
+          initialResult={baseResult()}
+          unfilteredHref="/for-sale"
+          now={1000}
+        />,
+      )
+      expect(
+        screen.queryByRole('button', { name: 'Map' }),
+      ).not.toBeInTheDocument()
+    })
+
+    it('renders the normal grid, not the map, when the flag is off even if view=map is in the URL', async () => {
+      vi.stubEnv('NEXT_PUBLIC_FEATURE_MAP', 'false')
+      currentSearch = 'view=map'
+      render(
+        <ResultsView
+          channel="sale"
+          basePath="/for-sale"
+          tier="unrestricted"
+          initialResult={baseResult()}
+          unfilteredHref="/for-sale"
+          now={1000}
+        />,
+      )
+      await flush()
+      expect(screen.queryByTestId('map-view')).not.toBeInTheDocument()
+      expect(screen.getByText('Oxford Road, Reading')).toBeInTheDocument()
+    })
+
+    it('renders MapView (not the grid) once view=map is active, and hides the desktop chrome only on mobile widths', async () => {
+      // jsdom has no real `matchMedia` implementation by default, which
+      // `useIsDesktop` treats as "not desktop" — stub it to exercise the
+      // desktop-only compact toggle button this test is actually about.
+      vi.stubGlobal('matchMedia', () => ({
+        matches: true,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+      currentSearch = 'view=map'
+      render(
+        <ResultsView
+          channel="sale"
+          basePath="/for-sale"
+          tier="unrestricted"
+          initialResult={baseResult({ totalCount: 248 })}
+          unfilteredHref="/for-sale"
+          now={1000}
+        />,
+      )
+      await flush()
+      const mapView = screen.getByTestId('map-view')
+      expect(mapView).toHaveAttribute('data-total-count', '248')
+      // The toggle button relabels to "List" and is aria-pressed while active.
+      expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+    })
+
+    it("wires the map's bbox requery into a URL navigation via applyBboxSearch, resetting page", async () => {
+      currentSearch = 'view=map&page=3&minBeds=2'
+      render(
+        <ResultsView
+          channel="sale"
+          basePath="/for-sale"
+          tier="unrestricted"
+          initialResult={baseResult()}
+          unfilteredHref="/for-sale"
+          now={1000}
+        />,
+      )
+      await flush()
+      fireEvent.click(screen.getByText('trigger-bbox-search'))
+
+      expect(replaceMock).toHaveBeenCalledTimes(1)
+      const href = replaceMock.mock.calls[0][0] as string
+      expect(href).toContain('bboxNeLat=51.5')
+      expect(href).toContain('minBeds=2')
+      expect(href).not.toContain('page=')
+    })
+
+    it('shows the "in this area" qualifier on the count line once a bbox is active', () => {
+      currentSearch =
+        'view=map&bboxNeLat=51.5&bboxNeLng=-0.9&bboxSwLat=51.4&bboxSwLng=-1'
+      render(
+        <ResultsView
+          channel="sale"
+          basePath="/for-sale"
+          tier="unrestricted"
+          initialResult={baseResult({ totalCount: 248 })}
+          unfilteredHref="/for-sale"
+          now={1000}
+        />,
+      )
+      expect(screen.getByText('248 homes in this area')).toBeInTheDocument()
+    })
   })
 })

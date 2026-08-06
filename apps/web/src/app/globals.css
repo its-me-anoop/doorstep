@@ -177,6 +177,21 @@
 
   --badge-private-bg: var(--secondary);
   --badge-private-fg: var(--secondary-foreground);
+
+  /* ---------------------------------------------------------------- */
+  /* 5d. Map pin/cluster tokens (M3-DESIGN-SPEC.md §1.2/§1.3) — aliases   */
+  /*    onto existing scale tokens only, same discipline as 5b/5c above.  */
+  /*    Contrast math in the spec's §1.2 table.                          */
+  /* ---------------------------------------------------------------- */
+  --pin-default-bg: var(--clay-050);
+  --pin-default-fg: var(--clay-600);
+  --pin-default-border: var(--clay-500);
+
+  --pin-underoffer-bg: var(--status-underoffer-bg);
+  --pin-underoffer-fg: var(--status-underoffer-fg);
+
+  --cluster-bg: var(--clay-500);
+  --cluster-fg: var(--clay-050);
 }
 
 /*
@@ -378,6 +393,146 @@ h4 {
 }
 .photo-tile-processing-label {
   display: none;
+}
+
+/* ---------------------------------------------------------------- */
+/* 9. Map view (M3-DESIGN-SPEC.md) — engine-agnostic CSS only, per §1.1: */
+/*    the same rules style whichever provider (MapLibre/Mapbox) is      */
+/*    live behind the MapAdapter port, matching this section's own      */
+/*    class-prefix duplication below.                                   */
+/* ---------------------------------------------------------------- */
+
+/* §1.1 basemap tint — targets the tile canvas only, never the marker/
+   popup DOM layer above it (kept at full, untinted palette fidelity). */
+.map-canvas-container canvas {
+  filter: saturate(0.82) sepia(0.13) brightness(1.02) contrast(0.97);
+}
+
+/* §1.1 zoom/attribution control override — both providers' own class
+   prefixes, since Mapbox GL never adopted MapLibre's post-fork renaming. */
+.maplibregl-ctrl-group,
+.mapboxgl-ctrl-group {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+.maplibregl-ctrl-attrib,
+.mapboxgl-ctrl-attrib {
+  background: var(--card);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+}
+
+/* §1.2 single-listing pin — flat rounded pill, no drop shadow, no
+   teardrop/pointer tail. Anchored via the map library's own
+   `anchor: 'bottom'` Marker option (gl-map-adapter.ts), not a
+   hand-rolled transform, so this rule owns only the pill's own visual
+   box, never its position. */
+.pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 100ms var(--ease-out-quart);
+}
+.pin--default {
+  background: var(--pin-default-bg);
+  color: var(--pin-default-fg);
+  border: 1.5px solid var(--pin-default-border);
+}
+.pin--underoffer {
+  background: var(--pin-underoffer-bg);
+  color: var(--pin-underoffer-fg);
+}
+/* §1.2/§1.6 hover/select/cross-highlight — transform only, no layout
+   shift, no glow. */
+.pin--active {
+  transform: scale(1.12);
+  z-index: 10;
+}
+
+/* §1.3 cluster badge — circle (not pill), the shape itself the primary
+   "this is many listings" signal, three discrete size steps by count. */
+.cluster {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  background: var(--cluster-bg);
+  color: var(--cluster-fg);
+  font-family: var(--font-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+.cluster--small {
+  width: 32px;
+  height: 32px;
+  font-size: var(--text-xs);
+}
+.cluster--medium {
+  width: 40px;
+  height: 40px;
+  font-size: 13px;
+}
+.cluster--large {
+  width: 48px;
+  height: 48px;
+  font-size: var(--text-base);
+}
+
+/* §2.4 desktop mini card popup — MapLibre/Mapbox both ship a white
+   rounded box with a drop shadow and a pointer tail by default; both
+   stripped here so the popup is a bare, invisible host and `MiniCard`'s
+   own `bg-card border-border` box is the only visible surface (avoids
+   the nested-card look a double frame would produce). */
+.mini-card-popup .maplibregl-popup-content,
+.mini-card-popup .mapboxgl-popup-content {
+  background: transparent;
+  padding: 0;
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+.mini-card-popup .maplibregl-popup-tip,
+.mini-card-popup .mapboxgl-popup-tip {
+  display: none;
+}
+@keyframes mini-card-popup-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.mini-card-popup {
+  animation: mini-card-popup-enter 150ms var(--ease-out-quart) both;
+}
+
+/* §3.3 mobile docked mini card — same register as the popup's own open
+   transition, travelling from the bottom edge instead of fading in
+   place. Applied by map-view.tsx to the docked panel's wrapper. */
+@keyframes mini-card-dock-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.mini-card-dock-enter {
+  animation: mini-card-dock-enter 200ms var(--ease-out-quart) both;
 }
 
 @media (prefers-reduced-motion: reduce) {

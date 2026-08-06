@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  applyBboxSearch,
   buildSearchApiQuery,
   buildSearchHref,
   hasActiveSearchFilters,
@@ -135,6 +136,63 @@ describe('parseSearchUrlState', () => {
       parseSearchUrlState(new URLSearchParams('radius=7')).radius,
     ).toBeUndefined()
   })
+
+  // M3-DESIGN-SPEC.md §1.9 — the map view URL param, layered on the M2
+  // vocabulary exactly like every other filter/sort/page param: list is
+  // the omitted default, matching the sort=newest/page=1 canonicalisation
+  // rule.
+  it('parses view=map', () => {
+    expect(parseSearchUrlState(new URLSearchParams('view=map')).view).toBe(
+      'map',
+    )
+  })
+
+  it('omits view from state for any value other than "map", including "list"', () => {
+    expect(
+      parseSearchUrlState(new URLSearchParams('view=list')).view,
+    ).toBeUndefined()
+    expect(
+      parseSearchUrlState(new URLSearchParams('view=bogus')).view,
+    ).toBeUndefined()
+    expect(parseSearchUrlState(new URLSearchParams('')).view).toBeUndefined()
+  })
+
+  // §1.9 — the four bbox corners, reusing the API's own param names
+  // verbatim. All four together or none, the same lenient "must be paired"
+  // rule §1.7 already applies to lat/lng.
+  it('parses all four bbox params together', () => {
+    const state = parseSearchUrlState(
+      new URLSearchParams(
+        'bboxNeLat=51.5&bboxNeLng=-0.9&bboxSwLat=51.4&bboxSwLng=-1.0',
+      ),
+    )
+    expect(state.bboxNeLat).toBe(51.5)
+    expect(state.bboxNeLng).toBe(-0.9)
+    expect(state.bboxSwLat).toBe(51.4)
+    expect(state.bboxSwLng).toBe(-1.0)
+  })
+
+  it('drops the bbox entirely when fewer than all four corners are present', () => {
+    const state = parseSearchUrlState(
+      new URLSearchParams('bboxNeLat=51.5&bboxNeLng=-0.9&bboxSwLat=51.4'),
+    )
+    expect(state.bboxNeLat).toBeUndefined()
+    expect(state.bboxNeLng).toBeUndefined()
+    expect(state.bboxSwLat).toBeUndefined()
+    expect(state.bboxSwLng).toBeUndefined()
+  })
+
+  it('a bbox wins over lat/lng/radius when a URL carries both (§1.9: bbox drops any existing point-radius criteria)', () => {
+    const state = parseSearchUrlState(
+      new URLSearchParams(
+        'lat=51.45&lng=-0.98&radius=5&bboxNeLat=51.5&bboxNeLng=-0.9&bboxSwLat=51.4&bboxSwLng=-1.0',
+      ),
+    )
+    expect(state.bboxNeLat).toBe(51.5)
+    expect(state.lat).toBeUndefined()
+    expect(state.lng).toBeUndefined()
+    expect(state.radius).toBeUndefined()
+  })
 })
 
 describe('searchUrlStateToSearchParams (canonical serialisation)', () => {
@@ -196,6 +254,58 @@ describe('searchUrlStateToSearchParams (canonical serialisation)', () => {
     const b = searchUrlStateToSearchParams({ type: ['terraced', 'flat'] })
     expect(a.toString()).toBe(b.toString())
   })
+
+  // §1.9
+  it('emits view=map only when set', () => {
+    expect(searchUrlStateToSearchParams({ view: 'map' }).get('view')).toBe(
+      'map',
+    )
+    expect(searchUrlStateToSearchParams({}).has('view')).toBe(false)
+  })
+
+  it('emits all four bbox params together', () => {
+    const params = searchUrlStateToSearchParams({
+      bboxNeLat: 51.5,
+      bboxNeLng: -0.9,
+      bboxSwLat: 51.4,
+      bboxSwLng: -1.0,
+    })
+    expect(params.get('bboxNeLat')).toBe('51.5')
+    expect(params.get('bboxNeLng')).toBe('-0.9')
+    expect(params.get('bboxSwLat')).toBe('51.4')
+    expect(params.get('bboxSwLng')).toBe('-1')
+  })
+
+  it('round-trips view + bbox alongside filters, sort and page (a view toggle is a lens change, not a new query — §1.9: page is never reset by view alone)', () => {
+    const original: SearchUrlState = {
+      minBeds: 2,
+      sort: 'price_desc',
+      page: 3,
+      view: 'map',
+      bboxNeLat: 51.5,
+      bboxNeLng: -0.9,
+      bboxSwLat: 51.4,
+      bboxSwLng: -1.0,
+    }
+    const reparsed = parseSearchUrlState(searchUrlStateToSearchParams(original))
+    expect(reparsed).toEqual(original)
+  })
+
+  it('never emits lat/lng/radius alongside a bbox, even if a caller passes both (defensive parity with the parse-side invariant)', () => {
+    const params = searchUrlStateToSearchParams({
+      lat: 51.45,
+      lng: -0.98,
+      radius: 5,
+      bboxNeLat: 51.5,
+      bboxNeLng: -0.9,
+      bboxSwLat: 51.4,
+      bboxSwLng: -1.0,
+    })
+    expect(params.has('lat')).toBe(false)
+    expect(params.has('lng')).toBe(false)
+    expect(params.has('radius')).toBe(false)
+    expect(params.get('bboxNeLat')).toBe('51.5')
+  })
 })
 
 describe('buildSearchHref', () => {
@@ -235,6 +345,36 @@ describe('needsCanonicalRedirect', () => {
     expect(
       needsCanonicalRedirect(new URLSearchParams('maxBeds=3&minBeds=1')),
     ).toBeNull()
+  })
+
+  // §1.9: "a URL with view=list present redirects (301) to the same URL
+  // without it" — the same canonicalisation rule as sort=newest/page=1.
+  it('redirects a URL carrying view=list to drop it', () => {
+    expect(needsCanonicalRedirect(new URLSearchParams('view=list'))).toBe('')
+  })
+
+  it('does not redirect a canonical view=map URL', () => {
+    expect(needsCanonicalRedirect(new URLSearchParams('view=map'))).toBeNull()
+  })
+
+  it('redirects a URL carrying only a partial bbox to drop it', () => {
+    expect(
+      needsCanonicalRedirect(
+        new URLSearchParams('bboxNeLat=51.5&bboxNeLng=-0.9'),
+      ),
+    ).toBe('')
+  })
+
+  it('redirects a URL carrying both a bbox and a lat/lng point to the bbox-only canonical form', () => {
+    const canonical = needsCanonicalRedirect(
+      new URLSearchParams(
+        'lat=51.45&lng=-0.98&bboxNeLat=51.5&bboxNeLng=-0.9&bboxSwLat=51.4&bboxSwLng=-1.0',
+      ),
+    )
+    expect(canonical).not.toBeNull()
+    const reparsed = new URLSearchParams(canonical ?? '')
+    expect(reparsed.has('lat')).toBe(false)
+    expect(reparsed.get('bboxNeLat')).toBe('51.5')
   })
 })
 
@@ -324,6 +464,88 @@ describe('buildSearchApiQuery', () => {
     const query = buildSearchApiQuery({}, 'sale')
     expect(query.town).toBeUndefined()
     expect(query.outcode).toBeUndefined()
+  })
+
+  // §1.9 — the bbox forwards verbatim (same param names as the API), and
+  // `view` never reaches the API at all (a UI lens, not a search filter).
+  it('forwards the bbox verbatim to the API vocabulary', () => {
+    const query = buildSearchApiQuery(
+      {
+        bboxNeLat: 51.5,
+        bboxNeLng: -0.9,
+        bboxSwLat: 51.4,
+        bboxSwLng: -1.0,
+      },
+      'sale',
+    )
+    expect(query.bboxNeLat).toBe('51.5')
+    expect(query.bboxNeLng).toBe('-0.9')
+    expect(query.bboxSwLat).toBe('51.4')
+    expect(query.bboxSwLng).toBe('-1')
+  })
+
+  it('omits lat/lng/radius from the API query when a bbox is present, even if state carries both (mutual exclusion enforced at the boundary, not just trusted from state)', () => {
+    const query = buildSearchApiQuery(
+      {
+        lat: 51.45,
+        lng: -0.98,
+        radius: 5,
+        bboxNeLat: 51.5,
+        bboxNeLng: -0.9,
+        bboxSwLat: 51.4,
+        bboxSwLng: -1.0,
+      },
+      'sale',
+    )
+    expect(query.lat).toBeUndefined()
+    expect(query.lng).toBeUndefined()
+    expect(query.radiusMiles).toBeUndefined()
+    expect(query.bboxNeLat).toBe('51.5')
+  })
+
+  it('never forwards view to the search API', () => {
+    const query = buildSearchApiQuery({ view: 'map' }, 'sale')
+    expect(query.view).toBeUndefined()
+  })
+})
+
+describe('applyBboxSearch', () => {
+  const bbox = { neLat: 51.5, neLng: -0.9, swLat: 51.4, swLng: -1.0 }
+
+  it('sets the four bbox corners and drops any existing lat/lng/radius', () => {
+    const result = applyBboxSearch(
+      { lat: 51.45, lng: -0.98, radius: 5, label: 'RG1 8BT' },
+      bbox,
+    )
+    expect(result.bboxNeLat).toBe(51.5)
+    expect(result.bboxNeLng).toBe(-0.9)
+    expect(result.bboxSwLat).toBe(51.4)
+    expect(result.bboxSwLng).toBe(-1.0)
+    expect(result.lat).toBeUndefined()
+    expect(result.lng).toBeUndefined()
+    expect(result.radius).toBeUndefined()
+  })
+
+  it('resets page to 1 (omitted), mirroring the channel-toggle precedent for a changed geo constraint', () => {
+    expect(applyBboxSearch({ page: 4 }, bbox).page).toBeUndefined()
+  })
+
+  it('preserves every other field — filters, sort, view and label — a bbox requery narrows where, not what', () => {
+    const result = applyBboxSearch(
+      {
+        minBeds: 2,
+        type: ['flat'],
+        sort: 'price_asc',
+        view: 'map',
+        label: 'RG1 8BT',
+      },
+      bbox,
+    )
+    expect(result.minBeds).toBe(2)
+    expect(result.type).toEqual(['flat'])
+    expect(result.sort).toBe('price_asc')
+    expect(result.view).toBe('map')
+    expect(result.label).toBe('RG1 8BT')
   })
 })
 
@@ -437,5 +659,24 @@ describe('resetStateForChannelSwitch', () => {
     })
     expect(result.furnished).toBeUndefined()
     expect(result.availableFrom).toBeUndefined()
+  })
+
+  // M3 extension of the M2 rule: `view` is a channel-independent UI lens
+  // and a bbox is a location constraint exactly like lat/lng/radius
+  // (already preserved above) — both survive a Buy/Rent switch for the
+  // same reason location does.
+  it('preserves view and bbox across a channel switch', () => {
+    const result = resetStateForChannelSwitch({
+      view: 'map',
+      bboxNeLat: 51.5,
+      bboxNeLng: -0.9,
+      bboxSwLat: 51.4,
+      bboxSwLng: -1.0,
+    })
+    expect(result.view).toBe('map')
+    expect(result.bboxNeLat).toBe(51.5)
+    expect(result.bboxNeLng).toBe(-0.9)
+    expect(result.bboxSwLat).toBe(51.4)
+    expect(result.bboxSwLng).toBe(-1.0)
   })
 })
