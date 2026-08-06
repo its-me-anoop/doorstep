@@ -65,6 +65,28 @@ describe('SearchListings', () => {
       })
     })
 
+    // M3-DESIGN-SPEC.md §1.3: the map's own separate, larger fetch window
+    // — a plain passthrough onto ports/search-index.ts's own
+    // `SearchQuery.hitsPerPage` (adapters/meilisearch already applies its
+    // 24-item default whenever this is omitted, unchanged by this).
+    it('forwards hitsPerPage when the caller supplies it', async () => {
+      const searchIndex = new FakeSearchIndex()
+      const searchListings = new SearchListings(searchIndex)
+
+      await searchListings.execute(input({ hitsPerPage: 200 }))
+
+      expect(searchIndex.lastSearchQuery).toMatchObject({ hitsPerPage: 200 })
+    })
+
+    it('omits hitsPerPage when the caller does not supply it', async () => {
+      const searchIndex = new FakeSearchIndex()
+      const searchListings = new SearchListings(searchIndex)
+
+      await searchListings.execute(input())
+
+      expect(searchIndex.lastSearchQuery?.hitsPerPage).toBeUndefined()
+    })
+
     it('omits geo entirely when neither radius nor bbox params are given', async () => {
       const searchIndex = new FakeSearchIndex()
       const searchListings = new SearchListings(searchIndex)

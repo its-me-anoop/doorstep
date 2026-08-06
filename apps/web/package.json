@@ -24,6 +24,8 @@
     "bench:search": "tsx scripts/search-bench.ts",
     "reindex:local": "tsx scripts/reindex-local.ts",
     "assert:map-bundle-isolation": "tsx scripts/assert-map-bundle-isolation.ts",
+    "vendor:maplibre-worker": "tsx scripts/vendor-maplibre-worker.ts",
+    "assert:maplibre-worker-vendored": "tsx scripts/assert-maplibre-worker-vendored.ts",
     "backfill:storage-emulator": "tsx scripts/backfill-storage-emulator.ts"
   },
   "dependencies": {

@@ -5,7 +5,7 @@
  * m2.smoke.spec.ts already run against (see playwright.config.ts's own
  * doc comment) — no local stack required, safe for every CI run.
  *
- * Three things this file proves for real, in CI, on every push:
+ * Four things this file proves for real, in CI, on every push:
  *
  *  1. `/for-sale?view=map` never crashes, with or without working map
  *     tiles. This environment has no live search index (same
@@ -30,6 +30,22 @@
  *     violations" claim is instead proven in
  *     m3.parity.spec.ts (RUN_LOCAL_STACK_E2E=1), which axe-scans the map
  *     view against real, seeded pins.
+ *  4. MapLibre's own Web Worker actually constructs, with a real, loadable
+ *     script URL, and never fires an `error` — the exact class of
+ *     production-only regression `maplibre-adapter.ts`'s own doc comment
+ *     describes in full (a Turbopack/`import.meta.url` bundling gap that
+ *     made `new Worker('')` execute silently, with no crash, no console
+ *     error, and no `map.on('error')`, so nothing about it was
+ *     CI-visible before this assertion existed). Deliberately
+ *     independent of both the live search index (worker construction is
+ *     driven by the *base* style's own tiled sources, not this
+ *     environment's pin-less `hits` source) and of OpenFreeMap's own
+ *     reachability from a CI runner (confirmed directly: blocking
+ *     `tiles.openfreemap.org` entirely still lets a worker construct
+ *     successfully — the map falls back to the point-3 tiles-failed
+ *     card instead, same as point 1 above) — so this stays exactly as
+ *     CI-safe as the rest of this file, while still catching the
+ *     regression this milestone actually shipped.
  *
  * Feature-flag-off coverage (`NEXT_PUBLIC_FEATURE_MAP=false` hides the
  * toggle): **not** re-proven here. `NEXT_PUBLIC_FEATURE_MAP` is inlined
@@ -138,6 +154,67 @@ test.describe('map view shell — no live search index (PRD §7.6 applied to the
     await expect(canvas.or(tilesFailedHeading)).toBeVisible({
       timeout: 15_000,
     })
+  })
+})
+
+test.describe('the map’s own Web Worker (production bundler regression guard)', () => {
+  // Regression test for the bug this file's own header comment (point 4)
+  // describes: root-caused by instrumenting `window.Worker` in exactly
+  // this way against a real `next build && next start`, which showed a
+  // worker constructed with url `""` that errored immediately, with no
+  // other observable symptom (no crash, no console error, no
+  // `map.on('error')`) — every prior assertion here checked only
+  // `data-listing-ids` or mere canvas/DOM presence, neither of which
+  // depends on the worker having worked at all.
+  test('constructs with a real, non-empty, loadable script URL and never errors', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      ;(window as unknown as { __workerEvents: unknown[] }).__workerEvents = []
+      const OriginalWorker = window.Worker
+      // @ts-expect-error — deliberately loose: this only ever needs to
+      // observe the constructor call and its own error channel, not
+      // reproduce `Worker`'s full type surface.
+      window.Worker = function (url: string | URL, options?: WorkerOptions) {
+        const entry = { url: String(url), errored: false }
+        ;(
+          window as unknown as { __workerEvents: (typeof entry)[] }
+        ).__workerEvents.push(entry)
+        const worker = new OriginalWorker(url, options)
+        worker.addEventListener('error', () => {
+          entry.errored = true
+        })
+        return worker
+      }
+    })
+
+    await page.goto('/for-sale?view=map')
+    await expect(page.getByTestId('map-view')).toBeVisible()
+    // Waiting on the canvas (rather than a fixed timeout) means the
+    // worker construction this assertion cares about — which happens as
+    // part of the map's own `Map` construction, before any tile request
+    // — has already had its chance to run by the time `__workerEvents`
+    // is read below.
+    await expect(page.locator('.map-canvas-container canvas')).toBeVisible({
+      timeout: 15_000,
+    })
+
+    const events = await page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            __workerEvents: { url: string; errored: boolean }[]
+          }
+        ).__workerEvents,
+    )
+    expect(events.length).toBeGreaterThan(0)
+    for (const event of events) {
+      // The exact failure mode being guarded against: MapLibre's own
+      // broken bundler fallback resolves to `new Worker('')`, and `''`
+      // is exactly what a regression here would produce again.
+      expect(event.url).not.toBe('')
+      expect(event.errored).toBe(false)
+    }
   })
 })
 

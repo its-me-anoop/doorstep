@@ -46,6 +46,7 @@ const QUERY_PARAM_NAMES = [
   'outcode',
   'sort',
   'page',
+  'hitsPerPage',
 ] as const
 
 function readQueryParams(

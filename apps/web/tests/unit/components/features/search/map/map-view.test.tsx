@@ -88,7 +88,17 @@ function baseProps(
 ) {
   return {
     channel: 'sale' as const,
-    hits: [hit()],
+    // Same single hit on both sides by default — most tests below don't
+    // care about the list/map split itself, only about the seam it
+    // replaced (a single `hits` prop). The tests that *do* care
+    // (pagination, an off-list-page pin) override one or the other
+    // explicitly.
+    mapHits: [hit()] as PublicSearchHit[] | null,
+    listHits: [hit()],
+    listPage: 1,
+    listTotalPages: 1,
+    onListPageChange: vi.fn(),
+    listHrefForPage: (page: number) => `/for-sale?page=${page}`,
     now: 1000,
     outage: false,
     dimmed: false,
@@ -171,11 +181,11 @@ describe('MapView', () => {
   // `a[href="/property/{slug}"]` already exposes in the list grid
   // (result-card.tsx), so a parity test can compare the two sets
   // directly with no id/slug translation step of its own.
-  it('exposes the current hits as slugs on the map view root (data-listing-ids), for e2e parity checks', async () => {
+  it('exposes the current *map* hits as slugs on the map view root (data-listing-ids), for e2e parity checks — independent of the list column’s own page', async () => {
     render(
       <MapView
         {...baseProps({
-          hits: [
+          mapHits: [
             hit({ id: 'pr_1', slug: 'oxford-road-flat' }),
             hit({
               id: 'pr_2',
@@ -219,9 +229,113 @@ describe('MapView', () => {
   })
 
   it('shows the "nothing in view" message in the list column for a genuinely empty viewport', async () => {
-    render(<MapView {...baseProps({ hits: [] })} />)
+    render(<MapView {...baseProps({ listHits: [], mapHits: [] })} />)
     await flush()
     expect(screen.getByText('Nothing in view right now.')).toBeInTheDocument()
+  })
+
+  // §1.3: "the map is never quietly capped to the list's current page...
+  // A pin's mini card can therefore link to a listing not on the list's
+  // current page; that's an accepted, intentional asymmetry, not a bug."
+  it('shows the list column empty message while the map itself still has pins beyond that page (§1.3’s intentional asymmetry)', async () => {
+    render(<MapView {...baseProps({ listHits: [] })} />)
+    await flush()
+    // The map's own data still reflects the full mapHits set (the
+    // default single hit) — only the desktop *list column* is empty.
+    expect(screen.getByText('Nothing in view right now.')).toBeInTheDocument()
+    expect(adapterState.setData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        features: expect.arrayContaining([
+          expect.objectContaining({
+            properties: expect.objectContaining({ hitId: 'pr_1' }),
+          }),
+        ]),
+      }),
+    )
+  })
+
+  it('opens a real map popup for a pin whose hit is not on the list column’s current page — the mini card reads from mapHits, not listHits', async () => {
+    isDesktopMock.mockReturnValue(true)
+    render(
+      <MapView
+        {...baseProps({
+          listHits: [hit({ id: 'pr_1', slug: 'oxford-road-flat' })],
+          mapHits: [
+            hit({ id: 'pr_1', slug: 'oxford-road-flat' }),
+            hit({
+              id: 'pr_2',
+              slug: 'kings-road-house',
+              displayAddress: 'Kings Road, Reading',
+              geo: { lat: 51.47, lng: -0.96 },
+            }),
+          ],
+        })}
+      />,
+    )
+    await flush()
+
+    act(() => {
+      // pr_2 is only ever in mapHits — never in this render's listHits.
+      adapterState.handlers.select.forEach((h) => h('pr_2'))
+    })
+    await flush()
+
+    expect(adapterState.openPopup).toHaveBeenCalledWith(
+      [-0.96, 51.47],
+      expect.any(HTMLElement),
+    )
+  })
+
+  // Client-only fetch (map-hits has no SSR equivalent — results-view.tsx's
+  // own doc comment) — `null` means "hasn't resolved yet," distinct from
+  // `[]` ("resolved, genuinely zero"), so a direct `?view=map` load never
+  // flashes "Nothing in view right now." before the first response
+  // arrives.
+  it('does not show the mobile "nothing in view" overlay while mapHits is still null (loading), only once it resolves to genuinely empty', async () => {
+    isDesktopMock.mockReturnValue(false)
+    const { rerender } = render(
+      <MapView {...baseProps({ mapHits: null, outage: false })} />,
+    )
+    await flush()
+    expect(
+      screen.queryByText('Nothing in view right now.'),
+    ).not.toBeInTheDocument()
+
+    rerender(<MapView {...baseProps({ mapHits: [], outage: false })} />)
+    await flush()
+    expect(screen.getByText('Nothing in view right now.')).toBeInTheDocument()
+  })
+
+  it('renders Pagination in the desktop list column, driven by the list props (not the map’s own up-to-200 set)', async () => {
+    const onListPageChange = vi.fn()
+    render(
+      <MapView
+        {...baseProps({
+          listPage: 2,
+          listTotalPages: 5,
+          onListPageChange,
+          listHrefForPage: (page) => `/for-sale?page=${page}`,
+        })}
+      />,
+    )
+    await flush()
+
+    const nav = screen.getByRole('navigation', { name: 'Search results pages' })
+    expect(nav).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '3' })).toHaveAttribute(
+      'href',
+      '/for-sale?page=3',
+    )
+    fireEvent.click(screen.getByRole('link', { name: '3' }))
+    expect(onListPageChange).toHaveBeenCalledWith(3)
+  })
+
+  it('does not render Pagination in the list column when there is only one page', async () => {
+    render(<MapView {...baseProps({ listPage: 1, listTotalPages: 1 })} />)
+    await flush()
+    expect(
+      screen.queryByRole('navigation', { name: 'Search results pages' }),
+    ).not.toBeInTheDocument()
   })
 
   it('opens a real map popup (not the docked JSX panel) when a pin is selected on desktop', async () => {

@@ -79,6 +79,29 @@ async function mapSlugs(page: Page): Promise<string[]> {
   return (JSON.parse(raw ?? '[]') as string[]).sort()
 }
 
+/** Waits for at least one real, rendered marker to appear on the map
+ * pane — not just `mapSlugs`'s `data-listing-ids` attribute. That
+ * attribute is set directly off the React `hits` prop (map-view.tsx),
+ * so it stays green even when the map library itself never actually
+ * places a single visible marker — precisely the production regression
+ * `maplibre-adapter.ts`'s and `gl-map-adapter.ts`'s own doc comments
+ * describe in full (a broken worker script URL, and separately a
+ * clustered GeoJSON source with no style layer ever referencing it,
+ * both silently produced a pin-less map with no crash and no error
+ * state — neither one moved `data-listing-ids`, since that's populated
+ * from the same `hits` prop regardless of whether the map adapter ever
+ * did anything with it). `.pin` is this codebase's own class
+ * (pin-marker.ts/cluster-marker.ts), provider-agnostic across MapLibre/
+ * Mapbox; `.maplibregl-marker` is MapLibre's own wrapper element around
+ * it, asserted too as a second, independent signal that the *map
+ * library itself* placed something on screen, not just that this app's
+ * own markup exists somewhere. */
+async function waitForVisiblePin(page: Page): Promise<void> {
+  await expect(page.locator('.pin, .maplibregl-marker').first()).toBeVisible({
+    timeout: 10_000,
+  })
+}
+
 /** The `<p aria-live="polite">{n} homes...</p>` count line
  * (results-view.tsx) — visible in both list and map view on desktop
  * (only mobile's map view hides the header row it lives in), so this
@@ -155,6 +178,13 @@ test.describe('map and list return identical results for the same criteria (PRD 
 
       expect(idsFromMap).toEqual(idsFromList)
       expect(countFromMap).toBe(countFromList)
+
+      // `data-listing-ids` alone would pass even if the map library never
+      // placed a single visible marker (see `waitForVisiblePin`'s own doc
+      // comment) — this is the assertion that actually proves the map
+      // rendered something, for every one of this suite's criteria sets,
+      // not just the accessibility tests below.
+      await waitForVisiblePin(page)
     })
   }
 })
@@ -253,6 +283,12 @@ test.describe('accessibility — map view with real, seeded pins (M3)', () => {
         timeout: 10_000,
       })
       .toBeGreaterThan(0)
+    // This describe block's own claim is "real pins mounted on a real
+    // map" — `data-listing-ids` alone doesn't prove that (see
+    // `waitForVisiblePin`'s doc comment), so the axe scan below would
+    // otherwise risk running against a pin-less canvas and still passing
+    // vacuously.
+    await waitForVisiblePin(page)
 
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze()
     expect(results.violations).toEqual([])
@@ -276,6 +312,7 @@ test.describe('accessibility — map view with real, seeded pins (M3)', () => {
         timeout: 10_000,
       })
       .toBeGreaterThan(0)
+    await waitForVisiblePin(page)
 
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze()
     expect(results.violations).toEqual([])

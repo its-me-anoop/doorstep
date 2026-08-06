@@ -38,6 +38,7 @@ class FakeMap {
     { config: Record<string, unknown>; source: FakeSource }
   >()
   controls: Array<{ control: unknown; position?: string }> = []
+  layers: Record<string, unknown>[] = []
   queryFeaturesResult: GeoJSON.Feature[] = []
   boundsResult = {
     getNorth: () => 51.5,
@@ -73,6 +74,10 @@ class FakeMap {
       config,
       source: new FakeSource(config.data as MapPinFeatureCollection),
     })
+  }
+
+  addLayer(layer: Record<string, unknown>) {
+    this.layers.push(layer)
   }
 
   getSource(id: string) {
@@ -242,6 +247,28 @@ describe('createGlMapAdapter', () => {
     const source = map.sources.get('hits')
     expect(source?.config.cluster).toBe(true)
     expect(typeof source?.config.clusterRadius).toBe('number')
+  })
+
+  // Production-only regression (found in a real `next build && next
+  // start` run, only visible once `maplibre-adapter.ts`'s separate
+  // worker-URL bug was fixed): confirmed empirically that neither
+  // MapLibre nor Mapbox GL ever tiles/loads a source with zero style
+  // layers referencing it — `querySourceFeatures` (`syncMarkers`) then
+  // always returns `[]`, and no marker ever mounts, no matter how many
+  // real hits are in the source's own data. A fake map can't reproduce
+  // that tiling behaviour itself (it's a real MapLibre/Mapbox
+  // internal), so this only asserts the adapter does its own necessary
+  // part: adding a layer that references the `hits` source.
+  it('adds an (invisible) layer referencing the hits source, so MapLibre/Mapbox actually tile it — §1.2/§1.3 pins/clusters stay HTML markers, not this layer', () => {
+    const { map } = init(fakeGlLibrary())
+    map.emit('load')
+    const hitsLayers = map.layers.filter((layer) => layer.source === 'hits')
+    expect(hitsLayers).toHaveLength(1)
+    const [layer] = hitsLayers
+    const paint = layer.paint as Record<string, unknown>
+    // Zero visual footprint — the real, visible pins/clusters are
+    // `syncMarkers`'s own HTML markers, mounted separately.
+    expect(paint['circle-opacity']).toBe(0)
   })
 
   it('queues setData before load and applies it once the source exists', () => {

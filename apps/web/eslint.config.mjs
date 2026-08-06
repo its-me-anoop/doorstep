@@ -70,6 +70,11 @@ const eslintConfig = defineConfig([
     'out/**',
     'build/**',
     'next-env.d.ts',
+    // scripts/vendor-maplibre-worker.ts's committed output — third-party
+    // maplibre-gl build artifacts copied verbatim (see
+    // src/components/features/search/map/maplibre-adapter.ts's own doc
+    // comment for why), not this project's own source.
+    'public/vendor/**',
   ]),
 ])
 

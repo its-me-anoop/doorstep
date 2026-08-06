@@ -308,4 +308,41 @@ describe('searchQuerySchema', () => {
       expect(result.success).toBe(false)
     })
   })
+
+  // M3-DESIGN-SPEC.md §1.3: "the map plots every matching hit in the
+  // query" — a separate, larger window than the list's own 24/page,
+  // requested via this param (search-url.ts's `buildMapSearchApiQuery`),
+  // not the `page` field above (a different concern: `page` is the list
+  // column's own paginated cursor into a fixed-size window, `hitsPerPage`
+  // is the size of that window).
+  describe('hitsPerPage', () => {
+    it('is undefined when omitted (the adapter applies its own 24-item default)', () => {
+      const result = searchQuerySchema.safeParse(raw())
+      expect(result.success).toBe(true)
+      if (!result.success) return
+      expect(result.data.hitsPerPage).toBeUndefined()
+    })
+
+    it('accepts a value up to the 200 cap, coerced to a number', () => {
+      const result = searchQuerySchema.safeParse(raw({ hitsPerPage: '200' }))
+      expect(result.success).toBe(true)
+      if (!result.success) return
+      expect(result.data.hitsPerPage).toBe(200)
+    })
+
+    it('rejects a value over the 200 cap', () => {
+      const result = searchQuerySchema.safeParse(raw({ hitsPerPage: '201' }))
+      expect(result.success).toBe(false)
+    })
+
+    it('rejects 0', () => {
+      const result = searchQuerySchema.safeParse(raw({ hitsPerPage: '0' }))
+      expect(result.success).toBe(false)
+    })
+
+    it('rejects a non-integer value', () => {
+      const result = searchQuerySchema.safeParse(raw({ hitsPerPage: '24.5' }))
+      expect(result.success).toBe(false)
+    })
+  })
 })

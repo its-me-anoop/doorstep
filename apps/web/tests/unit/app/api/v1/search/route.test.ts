@@ -74,6 +74,28 @@ describe('GET /api/v1/search', () => {
     expect(body.data).toEqual(result)
   })
 
+  // M3-DESIGN-SPEC.md §1.3: the map's own separate, larger fetch window
+  // (search-url.ts's `buildMapSearchApiQuery`) — this route has to read
+  // it off the query string before searchQuerySchema can ever see it, the
+  // same way every other param above does.
+  it('forwards hitsPerPage to the service when present', async () => {
+    const result = {
+      results: [],
+      totalCount: 0,
+      page: 1,
+      totalPages: 0,
+      facets: { propertyType: {} },
+    }
+    searchListings.execute.mockResolvedValue(result)
+    const { GET } = await import('@/app/api/v1/search/route')
+
+    await GET(getRequest('?channel=sale&hitsPerPage=200'))
+
+    expect(searchListings.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ hitsPerPage: 200 }),
+    )
+  })
+
   it('maps SearchUnavailableError to 503 search_unavailable', async () => {
     searchListings.execute.mockRejectedValue(new SearchUnavailableError())
     const { GET } = await import('@/app/api/v1/search/route')

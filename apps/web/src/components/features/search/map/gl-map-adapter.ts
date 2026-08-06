@@ -112,6 +112,7 @@ export interface GlMapInstance {
   on(event: string, handler: (event: never) => void): void
   addControl(control: unknown, position?: string): void
   addSource(id: string, source: Record<string, unknown>): void
+  addLayer(layer: Record<string, unknown>): void
   getSource(id: string): unknown
   querySourceFeatures(
     sourceId: string,
@@ -289,6 +290,29 @@ export function createGlMapAdapter(
           cluster: true,
           clusterRadius: CLUSTER_RADIUS_PX,
           clusterMaxZoom: CLUSTER_MAX_ZOOM,
+        })
+        // Production-only regression, found by a real `next build && next
+        // start` run: neither MapLibre nor Mapbox GL tiles/loads a source
+        // that no style layer references — confirmed empirically by
+        // instrumenting the map's own worker traffic, which showed the
+        // `hits` source's data reaching the worker (`LD`) and being
+        // acknowledged, but MapLibre never following up with a single
+        // tile request for it, so `querySourceFeatures` (`syncMarkers`,
+        // below) always returned `[]` and no marker ever mounted —
+        // independent of, and unmasked only after fixing,
+        // `maplibre-adapter.ts`'s separate worker-URL bug (with the
+        // worker permanently broken, this gap was invisible: nothing
+        // rendered either way). This layer exists purely to be that one
+        // reference, so MapLibre/Mapbox actually tile the source — it is
+        // not itself the rendering: §1.2/§1.3 (this file's own header
+        // comment) deliberately renders pins/clusters as HTML markers,
+        // never a GL-drawn layer, so this stays fully transparent and
+        // paints nothing of its own.
+        map?.addLayer({
+          id: `${SOURCE_ID}-tiling-anchor`,
+          type: 'circle',
+          source: SOURCE_ID,
+          paint: { 'circle-radius': 1, 'circle-opacity': 0 },
         })
         syncMarkers()
       })

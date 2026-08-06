@@ -157,6 +157,13 @@ function toSearchQuery(input: SearchQueryInput): SearchQuery {
     filters: buildFilters(input),
     sort: input.sort,
     page: input.page,
+    // M3-DESIGN-SPEC.md §1.3: the map's own separate, larger fetch
+    // window — a plain passthrough. `undefined` in, `undefined` out:
+    // ports/search-index.ts's own SearchQuery.hitsPerPage is already
+    // optional precisely so adapters/meilisearch's 24-item default
+    // applies unchanged for every caller (the list column's own fetch)
+    // that never asks for a bigger one.
+    hitsPerPage: input.hitsPerPage,
   }
 }
 

@@ -222,6 +222,13 @@ jobs:
       # see scripts/assert-map-bundle-isolation.ts's own doc comment.
       - name: Assert the map bundle stays isolated from the list routes
         run: pnpm assert:map-bundle-isolation
+      # Guards the production worker-URL fix (maplibre-adapter.ts's own
+      # doc comment): the vendored public/vendor/maplibre-gl/ worker
+      # files must stay byte-identical to whatever maplibre-gl version is
+      # actually installed, or production silently gets a stale/
+      # mismatched worker script again.
+      - name: Assert the vendored MapLibre worker files are up to date
+        run: pnpm assert:maplibre-worker-vendored
 
   e2e:
     needs: [build]

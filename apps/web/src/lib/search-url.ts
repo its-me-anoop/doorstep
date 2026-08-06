@@ -28,7 +28,7 @@
 
 import type { Channel, Furnished, PropertyType } from '@/domain/enums'
 import { FURNISHED, PROPERTY_TYPE } from '@/lib/validation/listing'
-import { SEARCH_SORT } from '@/lib/validation/search'
+import { MAX_HITS_PER_PAGE, SEARCH_SORT } from '@/lib/validation/search'
 
 export type SearchSort = 'newest' | 'price_asc' | 'price_desc'
 
@@ -416,6 +416,36 @@ export function buildSearchApiQuery(
     }
   }
 
+  return query
+}
+
+/**
+ * M3-DESIGN-SPEC.md §1.3: "The map is never quietly capped to the list's
+ * current page... the map plots every matching hit in the query" — the
+ * map pane's own marker-layer fetch (results-view.tsx), completely
+ * independent of the list column's own 24/page window
+ * (`buildSearchApiQuery`'s own `state.page`, which continues to drive
+ * only the list column + its Pagination, map-view.tsx §2.1).
+ *
+ * Built *from* `buildSearchApiQuery`, not a parallel reimplementation —
+ * every filter/bbox/area-scope translation stays in that one function, so
+ * "map and list return identical results for the same criteria" (PRD
+ * §13) is structural: both requests are the exact same criteria, just
+ * windowed differently. `page` is dropped entirely (never forwarded,
+ * regardless of `state.page`) — the map is never itself paginated, so
+ * there is no "which page" for it to ask the API for; `hitsPerPage` is
+ * set to the display/fetch cap (`MAX_HITS_PER_PAGE`,
+ * `lib/validation/search.ts`) so this always requests the largest window
+ * the API allows in one call.
+ */
+export function buildMapSearchApiQuery(
+  state: SearchUrlState,
+  channel: Channel,
+  areaFilter?: SearchAreaFilter,
+): Record<string, string | undefined> {
+  const query = buildSearchApiQuery(state, channel, areaFilter)
+  delete query.page
+  query.hitsPerPage = String(MAX_HITS_PER_PAGE)
   return query
 }
 

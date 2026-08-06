@@ -1,12 +1,20 @@
 /**
- * Maps the results view's own `PublicSearchHit[]` (the exact data the
- * list column already renders) into the GeoJSON `FeatureCollection` the
- * map's clustered source consumes (M3-DESIGN-SPEC.md §1.2/§1.3). This is
- * the one place that translation happens — map and list read the same
- * `PublicSearchResult` from the same fetch (results-view.tsx), so there
- * is no second query path to drift out of sync with the first (PRD §13's
- * M3 exit criterion: "map and list return identical results for the
- * same criteria" is structural, not coincidental, because of this).
+ * Maps `PublicSearchHit[]` into the GeoJSON `FeatureCollection` the map's
+ * clustered source consumes (M3-DESIGN-SPEC.md §1.2/§1.3). This is the
+ * one place that translation happens.
+ *
+ * The hits fed in here are *not* the same fetch the list column renders
+ * (§1.3: "the map is never quietly capped to the list's current page" —
+ * the list stays paginated at 24/page, the map plots its own separate,
+ * larger up-to-`MAX_HITS_PER_PAGE` window instead, `map-view.tsx`'s
+ * `mapHits` prop, fetched via `lib/search-url.ts`'s
+ * `buildMapSearchApiQuery`). "Map and list return identical results for
+ * the same criteria" (PRD §13's M3 exit criterion) is still structural,
+ * not coincidental, for a different reason: `buildMapSearchApiQuery` is
+ * built directly from `buildSearchApiQuery` (the list's own translation),
+ * reusing every filter/bbox/area-scope rule rather than reimplementing
+ * it — so the two requests can never disagree about *which* listings
+ * match, only about how many of them each one's own window returns.
  *
  * Deliberately a thin DTO: a pin only needs an id (to look the full hit
  * back up for the mini card, §1.4), a compact label and the under-offer

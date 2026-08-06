@@ -49,6 +49,18 @@ const RADIUS_MILES_MIN = 0.25
 const RADIUS_MILES_MAX = 30
 const PAGE_MAX = 200
 
+/** M3-DESIGN-SPEC.md §1.3's own cluster-label display cap, reused here as
+ * the map's fetch-window cap too (search-url.ts's
+ * `buildMapSearchApiQuery`) — the spec text itself only assigns "200" to
+ * cluster label text ("exact count up to 200; 200+ above that"), not to
+ * how many hits get fetched, but reusing the one number the spec already
+ * treats as meaningful in this exact feature area avoids inventing a
+ * second, arbitrary constant for the one place the spec is silent: an
+ * unfiltered, nationwide query has no fetch-side bound at all otherwise,
+ * which would turn "the map plots every matching hit in the query" into
+ * an unbounded payload/render cost for the one case that matters most. */
+export const MAX_HITS_PER_PAGE = 200
+
 export const SEARCH_SORT = z.enum(['newest', 'price_asc', 'price_desc'])
 
 /** `'true'`/`'false'` only — anything else (including an empty string) is
@@ -117,6 +129,21 @@ export const searchQuerySchema = z
 
     sort: SEARCH_SORT.default('newest'),
     page: z.coerce.number().int().min(1).max(PAGE_MAX).default(1),
+    /** M3-DESIGN-SPEC.md §1.3: the map's own fetch window, independent of
+     * `page` above (`page` is the list column's paginated cursor into a
+     * fixed 24-item window; this is the size of a *different* window the
+     * map's own marker layer requests — see search-url.ts's
+     * `buildMapSearchApiQuery`). No `.default()` — an absent value leaves
+     * this genuinely optional so `services/search/search-listings.ts`'s
+     * translation into `SearchQuery` can omit it and let
+     * `adapters/meilisearch`'s own `DEFAULT_HITS_PER_PAGE` (24) apply,
+     * unchanged, for every caller that never asks for a bigger window. */
+    hitsPerPage: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(MAX_HITS_PER_PAGE)
+      .optional(),
   })
   .superRefine((data, ctx) => {
     const hasLat = data.lat !== undefined

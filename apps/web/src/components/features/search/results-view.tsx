@@ -31,6 +31,7 @@ import {
 import { fetchSearchResults } from '@/lib/search-client'
 import {
   applyBboxSearch,
+  buildMapSearchApiQuery,
   buildSearchApiQuery,
   buildSearchHref,
   parseSearchUrlState,
@@ -39,7 +40,10 @@ import {
   type SearchUrlState,
 } from '@/lib/search-url'
 import { cn } from '@/lib/utils'
-import type { PublicSearchResult } from '@/services/search/search-listings'
+import type {
+  PublicSearchHit,
+  PublicSearchResult,
+} from '@/services/search/search-listings'
 
 /**
  * PRD §7.1: "search list route ships without [the map bundle]." This
@@ -162,6 +166,14 @@ export function ResultsView({
   const [result, setResult] = useState(initialResult ?? EMPTY_RESULT)
   const [outage, setOutage] = useState(initialResult === null)
   const [isFetching, setIsFetching] = useState(false)
+  // §1.3's own separate, larger map-only fetch — see `loadMapHits`'s doc
+  // comment below. `null` (not `[]`) until the first response arrives:
+  // there's no SSR equivalent for this second window (MapView only ever
+  // mounts client-side, `next/dynamic(..., { ssr: false })` above), so
+  // `null` is the honest "hasn't loaded yet" state map-view.tsx's own
+  // empty-state logic treats distinctly from "loaded, genuinely zero."
+  const [mapHits, setMapHits] = useState<PublicSearchHit[] | null>(null)
+  const [isFetchingMapHits, setIsFetchingMapHits] = useState(false)
   const [, startTransition] = useTransition()
   const isFirstEffect = useRef(true)
 
@@ -198,6 +210,87 @@ export function ResultsView({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the serialised query string, not `state`/`channel` object identity, so this only re-fires when the URL actually changes.
   }, [searchKey])
+
+  /**
+   * M3-DESIGN-SPEC.md §1.3 / the M3 review's own blocking finding: the
+   * map pane's marker layer must never be silently capped to the list
+   * column's own 24/page window. This is that second, independent fetch
+   * — `buildMapSearchApiQuery` (search-url.ts) requests the same
+   * criteria as the list's own `buildSearchApiQuery` above, just windowed
+   * up to the display/fetch cap and never paginated, so the two requests
+   * can't disagree about *which* listings match (PRD §13), only about
+   * how many of them each side's own window returns.
+   *
+   * A best-effort catch, deliberately not its own outage state: this
+   * fetch targets the exact same backend/query as the primary one above
+   * — if the primary fetch fails, `outage` is already `true`, and
+   * map-view.tsx already treats `outage` as authoritative over `mapHits`
+   * regardless of this fetch's own outcome. Leaving `mapHits` at its
+   * previous value on a failure here (rather than resetting to `[]`) also
+   * matches §1.7's dim-and-crossfade policy — the outgoing pin set stays
+   * visible, dimmed, until a new one successfully replaces it.
+   *
+   * Deliberately does *not* itself call `setIsFetchingMapHits(true)` —
+   * every call site does that inline, immediately before calling this,
+   * the same way the primary fetch effect above calls `setIsFetching(true)`
+   * as a direct statement in its own body. Every `setState` call this
+   * function itself makes only ever happens inside a `.then`/`.catch`/
+   * `.finally` callback (an async microtask, not a synchronous effect-body
+   * call) — the same shape the primary effect's own inline fetch already
+   * uses without issue.
+   */
+  function fetchMapHits(): () => void {
+    let cancelled = false
+    fetchSearchResults(buildMapSearchApiQuery(state, channel, areaFilter))
+      .then((data) => {
+        if (!cancelled) setMapHits(data.results)
+      })
+      .catch((error: unknown) => {
+        void error
+      })
+      .finally(() => {
+        if (!cancelled) setIsFetchingMapHits(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }
+
+  useEffect(() => {
+    if (!isMapView) return
+    // react-hooks/set-state-in-effect flags this because the general
+    // shape (setState synchronously in an effect body) is the usual
+    // "deriving state from props that could just be computed during
+    // render" cascading-render footgun the rule exists to catch. This
+    // effect isn't that: `searchKey`/`isMapView` changing is a genuine
+    // external event (the URL changed), and flipping a loading flag the
+    // instant a new fetch starts — before the fetch itself resolves — is
+    // the standard data-fetching pattern, identical in kind to the
+    // primary fetch effect just above (`setIsFetching(true)`, same
+    // file), which the linter doesn't flag only because that effect's
+    // own early return is a `useRef` mount-guard rather than a plain
+    // dependency-array value.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsFetchingMapHits(true)
+    const cancel = fetchMapHits()
+    // Resets the flag on every teardown of *this* run, not just a
+    // successful `fetchMapHits().finally()` — without this, toggling
+    // away from map view (or a `searchKey` change) while a fetch is
+    // still in flight would leave `isFetchingMapHits` stuck `true`
+    // forever: the abandoned promise's own `.finally()` becomes a no-op
+    // once `cancel()` flips its `cancelled` flag, and the *next* effect
+    // run (if any) only fires when `isMapView` is still true, so a
+    // toggle-away has nothing left to flip it back off. If a new run
+    // immediately follows (a `searchKey` change while still in map
+    // view), that run's own `setIsFetchingMapHits(true)` right above
+    // fires again in the same commit, so this is never visible as a
+    // flicker.
+    return () => {
+      cancel()
+      setIsFetchingMapHits(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the serialised query string (+ isMapView) — see the primary fetch effect's own identical reasoning; unlike that effect, this one has no SSR value to skip an initial fetch in favour of, so it always runs on the first render where isMapView is already true.
+  }, [searchKey, isMapView])
 
   function navigate(next: SearchUrlState) {
     const href = buildSearchHref(basePath, next)
@@ -245,13 +338,25 @@ export function ResultsView({
       .finally(() => {
         if (!cancelled) setIsFetching(false)
       })
+    // Outage state is shared between the list and map panes (both read
+    // it from the exact same query) — a retry has to refresh both
+    // fetches together, or the map pane would stay stuck showing
+    // whatever `mapHits` its own last (failed) attempt left behind.
+    let cancelMapHits: (() => void) | undefined
+    if (isMapView) {
+      setIsFetchingMapHits(true)
+      cancelMapHits = fetchMapHits()
+    }
     return () => {
       cancelled = true
+      cancelMapHits?.()
     }
   }
 
   const heading = buildSearchHeading({ channel, state, tier, areaLabel })
-  const dimmed = isFetching
+  // §1.7: "One shared indicator, not two" — list and map dim together off
+  // one combined signal, whichever fetch(es) happen to be in flight.
+  const dimmed = isFetching || isFetchingMapHits
   const emptyStateAreaLabel =
     tier === 'area' && areaLabel
       ? areaLabel
@@ -341,7 +446,14 @@ export function ResultsView({
         <div className="mt-6">
           <MapView
             channel={channel}
-            hits={result.results}
+            mapHits={mapHits}
+            listHits={result.results}
+            listPage={result.page}
+            listTotalPages={result.totalPages}
+            onListPageChange={handlePageChange}
+            listHrefForPage={(page) =>
+              buildSearchHref(basePath, { ...state, page })
+            }
             now={now}
             outage={outage}
             dimmed={dimmed}

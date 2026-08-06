@@ -4,3 +4,6 @@ node_modules
 coverage
 pnpm-lock.yaml
 apps/web/src/components/ui
+# Third-party maplibre-gl build artifacts copied verbatim
+# (scripts/vendor-maplibre-worker.ts) — not this project's own source.
+apps/web/public/vendor

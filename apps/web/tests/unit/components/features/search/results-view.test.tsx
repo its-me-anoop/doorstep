@@ -22,11 +22,20 @@ vi.mock('@/lib/search-client', async () => {
 // M3: MapView itself (marker sync, popups, the real map libraries) is
 // exhaustively covered by map-view.test.tsx — this file only needs to
 // verify results-view.tsx's own wiring into it (props, the bbox→URL
-// handler), so a thin stub stands in for the real (dynamically
-// imported) component.
+// handler, and — since M3's review findings — the *separate* map-hits
+// fetch and list/map prop split), so a thin stub stands in for the real
+// (dynamically imported) component, surfacing every prop this file's own
+// tests need to read back as a `data-*` attribute.
 vi.mock('@/components/features/search/map/map-view', () => ({
   MapView: (props: {
     totalCount: number
+    mapHits: { id: string }[] | null
+    listHits: { id: string }[]
+    listPage: number
+    listTotalPages: number
+    dimmed: boolean
+    onRetry: () => void
+    onListPageChange: (page: number) => void
     onBboxSearch: (bbox: {
       neLat: number
       neLng: number
@@ -34,7 +43,21 @@ vi.mock('@/components/features/search/map/map-view', () => ({
       swLng: number
     }) => void
   }) => (
-    <div data-testid="map-view" data-total-count={props.totalCount}>
+    <div
+      data-testid="map-view"
+      data-total-count={props.totalCount}
+      data-map-hits-count={
+        props.mapHits === null ? 'null' : props.mapHits.length
+      }
+      data-list-hits-count={props.listHits.length}
+      data-list-page={props.listPage}
+      data-list-total-pages={props.listTotalPages}
+      data-dimmed={props.dimmed}
+    >
+      <button onClick={() => props.onListPageChange(2)}>
+        trigger-list-page-change
+      </button>
+      <button onClick={props.onRetry}>trigger-retry</button>
       <button
         onClick={() =>
           props.onBboxSearch({
@@ -108,6 +131,12 @@ async function flush() {
 describe('ResultsView', () => {
   beforeEach(() => {
     currentSearch = ''
+    // A sensible default so map-view tests (whose map-hits fetch fires
+    // unconditionally once `isMapView` is true, with no SSR value to
+    // fall back on) don't have to opt into a resolved value individually
+    // — any test that needs a different result/rejection still overrides
+    // this via its own `mockResolvedValueOnce`/`mockRejectedValue` call.
+    fetchSearchResultsMock.mockResolvedValue(baseResult())
   })
 
   afterEach(() => {
@@ -385,6 +414,183 @@ describe('ResultsView', () => {
       expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute(
         'aria-pressed',
         'true',
+      )
+    })
+
+    // M3-DESIGN-SPEC.md §1.3 / the M3 review's own blocking finding: the
+    // map pane must never be silently capped to the list column's own
+    // 24/page window. This is the fix — a second, independent fetch,
+    // requesting the fetch-window cap and never the list's own page.
+    it('fetches a separate, larger hit set for the map pane, independent of the list column’s own paginated result (§1.3)', async () => {
+      const listResult = baseResult({
+        results: [hit({ id: 'pr_1' })],
+        totalCount: 30,
+        page: 2,
+        totalPages: 2,
+      })
+      const mapResult = baseResult({
+        results: [hit({ id: 'pr_1' }), hit({ id: 'pr_2' })],
+        totalCount: 30,
+      })
+      fetchSearchResultsMock.mockResolvedValueOnce(mapResult)
+      currentSearch = 'view=map&page=2'
+
+      render(
+        <ResultsView
+          channel="sale"
+          basePath="/for-sale"
+          tier="unrestricted"
+          initialResult={listResult}
+          unfilteredHref="/for-sale"
+          now={1000}
+        />,
+      )
+      await flush()
+
+      // Exactly one fetch: the SSR-provided `listResult` already covers
+      // the list column (no extra fetch just to satisfy mounting, per
+      // this file's very first test) — only the map-hits fetch is new.
+      expect(fetchSearchResultsMock).toHaveBeenCalledTimes(1)
+      const query = fetchSearchResultsMock.mock.calls[0]?.[0] as Record<
+        string,
+        string | undefined
+      >
+      expect(query.hitsPerPage).toBe('200')
+      expect(query.page).toBeUndefined()
+
+      const mapView = screen.getByTestId('map-view')
+      expect(mapView).toHaveAttribute('data-map-hits-count', '2')
+      // The list column's own props still reflect the SSR-provided,
+      // paginated result — completely untouched by the map-only fetch.
+      expect(mapView).toHaveAttribute('data-list-hits-count', '1')
+      expect(mapView).toHaveAttribute('data-list-page', '2')
+      expect(mapView).toHaveAttribute('data-list-total-pages', '2')
+    })
+
+    it('does not fetch the map hit set while in list view', () => {
+      render(
+        <ResultsView
+          channel="sale"
+          basePath="/for-sale"
+          tier="unrestricted"
+          initialResult={baseResult()}
+          unfilteredHref="/for-sale"
+          now={1000}
+        />,
+      )
+      expect(fetchSearchResultsMock).not.toHaveBeenCalled()
+    })
+
+    it('mapHits is null (not []) until the map-hits fetch resolves, so a direct ?view=map load never reports a premature empty map', async () => {
+      let resolveMapFetch: ((value: PublicSearchResult) => void) | undefined
+      fetchSearchResultsMock.mockReturnValueOnce(
+        new Promise<PublicSearchResult>((resolve) => {
+          resolveMapFetch = resolve
+        }),
+      )
+      currentSearch = 'view=map'
+
+      render(
+        <ResultsView
+          channel="sale"
+          basePath="/for-sale"
+          tier="unrestricted"
+          initialResult={baseResult()}
+          unfilteredHref="/for-sale"
+          now={1000}
+        />,
+      )
+      await flush()
+      expect(screen.getByTestId('map-view')).toHaveAttribute(
+        'data-map-hits-count',
+        'null',
+      )
+
+      await act(async () => {
+        resolveMapFetch?.(baseResult({ results: [hit()] }))
+        await Promise.resolve()
+      })
+      expect(screen.getByTestId('map-view')).toHaveAttribute(
+        'data-map-hits-count',
+        '1',
+      )
+    })
+
+    it('does not leave the shared dimmed indicator stuck on after toggling away from map view mid-fetch', async () => {
+      let resolveMapFetch: ((value: PublicSearchResult) => void) | undefined
+      fetchSearchResultsMock.mockReturnValueOnce(
+        new Promise<PublicSearchResult>((resolve) => {
+          resolveMapFetch = resolve
+        }),
+      )
+      currentSearch = 'view=map'
+      const { rerender } = render(
+        <ResultsView
+          channel="sale"
+          basePath="/for-sale"
+          tier="unrestricted"
+          initialResult={baseResult()}
+          unfilteredHref="/for-sale"
+          now={1000}
+        />,
+      )
+      await flush()
+      expect(screen.getByTestId('map-view')).toHaveAttribute(
+        'data-dimmed',
+        'true',
+      )
+
+      // Toggle away from map view before the map-hits fetch resolves.
+      currentSearch = ''
+      rerender(
+        <ResultsView
+          channel="sale"
+          basePath="/for-sale"
+          tier="unrestricted"
+          initialResult={baseResult()}
+          unfilteredHref="/for-sale"
+          now={1000}
+        />,
+      )
+      await flush()
+
+      expect(screen.queryByText('Updating results…')).not.toBeInTheDocument()
+
+      // The abandoned fetch resolving afterwards must not resurrect the
+      // stuck indicator either.
+      await act(async () => {
+        resolveMapFetch?.(baseResult())
+        await Promise.resolve()
+      })
+      expect(screen.queryByText('Updating results…')).not.toBeInTheDocument()
+    })
+
+    it('retrying refreshes both the list result and the map hit set together', async () => {
+      currentSearch = 'view=map'
+      render(
+        <ResultsView
+          channel="sale"
+          basePath="/for-sale"
+          tier="unrestricted"
+          initialResult={baseResult()}
+          unfilteredHref="/for-sale"
+          now={1000}
+        />,
+      )
+      await flush()
+      fetchSearchResultsMock.mockClear()
+      fetchSearchResultsMock.mockResolvedValue(
+        baseResult({ results: [hit({ id: 'pr_1' }), hit({ id: 'pr_2' })] }),
+      )
+
+      fireEvent.click(screen.getByText('trigger-retry'))
+      await flush()
+
+      // The list's own `retry()` fetch and the map-hits fetch both fire.
+      expect(fetchSearchResultsMock).toHaveBeenCalledTimes(2)
+      expect(screen.getByTestId('map-view')).toHaveAttribute(
+        'data-map-hits-count',
+        '2',
       )
     })
 

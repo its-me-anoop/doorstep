@@ -21,6 +21,8 @@
     "seed:search-5k:clean": "pnpm --filter web seed:search-5k:clean",
     "bench:search": "pnpm --filter web bench:search",
     "assert:map-bundle-isolation": "pnpm --filter web assert:map-bundle-isolation",
+    "vendor:maplibre-worker": "pnpm --filter web vendor:maplibre-worker",
+    "assert:maplibre-worker-vendored": "pnpm --filter web assert:maplibre-worker-vendored",
     "emulator:storage": "firebase emulators:start --only storage --project my-shop-cdeac"
   }
 }

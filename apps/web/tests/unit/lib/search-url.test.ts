@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
+import { MAX_HITS_PER_PAGE } from '@/lib/validation/search'
 import {
   applyBboxSearch,
+  buildMapSearchApiQuery,
   buildSearchApiQuery,
   buildSearchHref,
   hasActiveSearchFilters,
@@ -506,6 +508,47 @@ describe('buildSearchApiQuery', () => {
   it('never forwards view to the search API', () => {
     const query = buildSearchApiQuery({ view: 'map' }, 'sale')
     expect(query.view).toBeUndefined()
+  })
+})
+
+// M3-DESIGN-SPEC.md §1.3: "The map is never quietly capped to the list's
+// current page... the map plots every matching hit in the query" — this
+// is the map's own, separate request for that (results-view.tsx calls
+// this instead of buildSearchApiQuery for the map pane's own marker-layer
+// fetch), independent of the list column's own 24/page window.
+describe('buildMapSearchApiQuery', () => {
+  it('requests the fetch-window cap via hitsPerPage, and never forwards page — the map is never itself paginated', () => {
+    const query = buildMapSearchApiQuery({ page: 3, minBeds: 2 }, 'sale')
+    expect(query.hitsPerPage).toBe(String(MAX_HITS_PER_PAGE))
+    expect(query.page).toBeUndefined()
+    // Every other filter still goes through unchanged — same
+    // translation logic as buildSearchApiQuery, just with a different
+    // page/hitsPerPage policy layered on top.
+    expect(query.bedsMin).toBe('2')
+  })
+
+  it('forwards the same filters/bbox/area-scope as buildSearchApiQuery would, for the identical state', () => {
+    const state: SearchUrlState = {
+      minPrice: 250000,
+      bboxNeLat: 51.5,
+      bboxNeLng: -0.9,
+      bboxSwLat: 51.4,
+      bboxSwLng: -1.0,
+    }
+    const listQuery = buildSearchApiQuery(state, 'sale', { town: 'Reading' })
+    const mapQuery = buildMapSearchApiQuery(state, 'sale', { town: 'Reading' })
+
+    // Same query, same criteria — every key except page/hitsPerPage must
+    // agree, which is exactly what makes "map and list return identical
+    // results for the same criteria" (PRD §13) structural rather than
+    // coincidental: both translations share this one function's own
+    // filter/bbox logic underneath.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructured only to omit it below
+    const { page: _listPage, ...listRest } = listQuery
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructured only to omit it below
+    const { hitsPerPage: _mapHitsPerPage, ...mapRest } = mapQuery
+    expect(mapRest).toEqual(listRest)
+    expect(mapQuery.hitsPerPage).toBe(String(MAX_HITS_PER_PAGE))
   })
 })
 

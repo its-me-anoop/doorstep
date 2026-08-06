@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 
 import type { Channel } from '@/domain/enums'
 import { OutagePanel } from '@/components/features/search/outage-panel'
+import { Pagination } from '@/components/features/search/pagination'
 import { ResultCard } from '@/components/features/search/result-card'
 import type { MapBoundingBox } from '@/lib/search-url'
 import { cn } from '@/lib/utils'
@@ -22,10 +23,33 @@ import { useSearchAsYouMove } from './use-search-as-you-move'
 
 interface MapViewProps {
   channel: Channel
-  /** The exact same `PublicSearchResult.results` the list column/grid
-   * renders (results-view.tsx) — see geojson.ts's own doc comment for
-   * why this makes list/map parity structural, not coincidental. */
-  hits: PublicSearchHit[]
+  /** Up to `MAX_HITS_PER_PAGE` matching hits for the *current query*,
+   * fetched independently of the list column's own 24/page window
+   * (results-view.tsx's own separate `buildMapSearchApiQuery` fetch —
+   * see geojson.ts's doc comment for why parity with the list is still
+   * structural despite this). Backs the pins/clusters, the
+   * `data-listing-ids` e2e hook, and the selected-pin lookup below — a
+   * pin can reference a hit that isn't in `listHits` (§1.3: "a pin's
+   * mini card can therefore link to a listing not on the list's current
+   * page; that's an accepted, intentional asymmetry, not a bug").
+   * `null` while that fetch (client-only; no SSR equivalent exists for
+   * this second, larger window) hasn't resolved yet — treated the same
+   * as "no pins yet," never as "genuinely zero," so a direct `?view=map`
+   * load never flashes an incorrect empty-state message before the
+   * first response arrives. */
+  mapHits: PublicSearchHit[] | null
+  /** The list column's own paginated 24/page slice (M2 §3.7, unchanged
+   * mechanics) — results-view.tsx's existing SSR-backed fetch. Only
+   * affects the desktop list column (§2.1) and its own `Pagination`
+   * below; independent of which hits the map pane itself plots. */
+  listHits: PublicSearchHit[]
+  /** `listHits`'s own page/total, for the list column's `Pagination`
+   * (§2.1: "sits at the bottom of this column, inside its own scroll
+   * container — unchanged in mechanics"). */
+  listPage: number
+  listTotalPages: number
+  onListPageChange: (page: number) => void
+  listHrefForPage: (page: number) => string
   now: number
   outage: boolean
   dimmed: boolean
@@ -59,7 +83,12 @@ interface MapViewProps {
  */
 export function MapView({
   channel,
-  hits,
+  mapHits,
+  listHits,
+  listPage,
+  listTotalPages,
+  onListPageChange,
+  listHrefForPage,
   now,
   outage,
   dimmed,
@@ -81,13 +110,18 @@ export function MapView({
   // set — `adapterRef` itself isn't reactive, so the `setData`/
   // `setHighlightedHit` effects below need *some* state in their
   // dependency array to guarantee they run again once the (async)
-  // adapter actually exists, even when `hits`/`highlightedHitId`
+  // adapter actually exists, even when `mapHits`/`highlightedHitId`
   // themselves haven't changed since the very first render.
   const [adapterReady, setAdapterReady] = useState(false)
 
   const searchAsYouMove = useSearchAsYouMove({ onRequery: onBboxSearch })
 
-  const selectedHit = hits.find((hit) => hit.id === selectedHitId) ?? null
+  // §1.3's own intentional asymmetry: a selected pin's hit is looked up
+  // in `mapHits` (what the map itself actually plotted), never
+  // `listHits` (the list column's own, possibly-narrower page) — a pin
+  // can reference a hit that isn't on the list's current page at all.
+  const selectedHit =
+    (mapHits ?? []).find((hit) => hit.id === selectedHitId) ?? null
 
   // Mount the map once. `initialCamera` is deliberately read only at
   // mount time (not a dependency) — §5: nothing in this milestone
@@ -119,17 +153,22 @@ export function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once by design; see the comment above.
   }, [])
 
-  // Keeps the map's pins in lockstep with the same result set the list
-  // renders — no second query path (PRD §13's M3 exit criterion).
-  // Pin-less during an outage (§1.8 point 2: "Base tiles keep
-  // rendering... just pin-less"). `adapterReady` (not just
-  // `hits`/`outage`) is a dependency so this also fires the *first*
+  // Keeps the map's pins in lockstep with its own up-to-`MAX_HITS_PER_PAGE`
+  // hit set (§1.3) — not the list column's narrower page (see
+  // geojson.ts's doc comment for why the two still can't disagree on
+  // *which* listings match, only on how many each side's own window
+  // returns). Pin-less during an outage (§1.8 point 2: "Base tiles keep
+  // rendering... just pin-less") and while `mapHits` hasn't resolved yet
+  // (`null` — this fetch has no SSR equivalent). `adapterReady` (not just
+  // `mapHits`/`outage`) is a dependency so this also fires the *first*
   // time the async adapter becomes available, not only on later prop
   // changes.
   useEffect(() => {
     if (!adapterReady) return
-    adapterRef.current?.setData(hitsToFeatureCollection(outage ? [] : hits))
-  }, [hits, outage, adapterReady])
+    adapterRef.current?.setData(
+      hitsToFeatureCollection(outage || !mapHits ? [] : mapHits),
+    )
+  }, [mapHits, outage, adapterReady])
 
   // §2.4 desktop popup vs §3.3 mobile docked panel — the one JS
   // breakpoint branch this view needs (use-is-desktop.ts).
@@ -180,7 +219,18 @@ export function MapView({
   }, [selectedHitId])
 
   const showListColumnOutage = outage
-  const showListColumnEmpty = !outage && hits.length === 0
+  // §2.1's own list column — driven by `listHits` (the 24/page window),
+  // never `mapHits`: a page with no cards of its own stays "empty" here
+  // even while the map pane beside it (or the mobile overlay below,
+  // driven by `mapHits` instead) still has real pins, per §1.3's own
+  // accepted asymmetry.
+  const showListColumnEmpty = !outage && listHits.length === 0
+  // The mobile full-screen map has no separate list column at all — its
+  // one "nothing to show" signal has to be the map's own data. `null`
+  // (not yet loaded) deliberately does *not* count as empty, so a direct
+  // `?view=map` load never flashes this before the first response
+  // arrives.
+  const showMapPaneEmpty = !outage && mapHits !== null && mapHits.length === 0
 
   return (
     <div
@@ -190,16 +240,16 @@ export function MapView({
       // per-pin DOM an outside test could read ids back from without
       // driving a real cluster-expand gesture per pin. `data-listing-ids`
       // publishes the same slug list `geojson.ts` fed into the pins/
-      // cluster source — the exact array behind "map and list return
-      // identical results for the same criteria" (PRD §13) — as one
-      // stable, always-present attribute instead. Slugs (not ids): the
-      // same public identifier `a[href="/property/{slug}"]` already
-      // exposes in the list grid (result-card.tsx), so a parity test
-      // compares the two sets with no id/slug translation of its own.
-      // Empty during an outage, mirroring the pin-less map (§1.8).
+      // cluster source (`mapHits`, §1.3's own up-to-`MAX_HITS_PER_PAGE`
+      // window — not `listHits`) as one stable, always-present attribute
+      // instead. Slugs (not ids): the same public identifier
+      // `a[href="/property/{slug}"]` already exposes in the list grid
+      // (result-card.tsx), so a parity test compares the two sets with no
+      // id/slug translation of its own. Empty during an outage or while
+      // `mapHits` hasn't resolved yet, mirroring the pin-less map (§1.8).
       data-testid="map-view"
       data-listing-ids={JSON.stringify(
-        outage ? [] : hits.map((hit) => hit.slug),
+        outage || !mapHits ? [] : mapHits.map((hit) => hit.slug),
       )}
       className="flex flex-col lg:h-[clamp(480px,75vh,820px)] lg:flex-row"
     >
@@ -215,24 +265,40 @@ export function MapView({
             channel={channel}
           />
         ) : (
-          <div className="flex flex-col gap-6">
-            {hits.map((hit) => (
-              <div
-                key={hit.id}
-                onMouseEnter={() => setHighlightedHitId(hit.id)}
-                onMouseLeave={() => setHighlightedHitId(null)}
-                onFocus={() => setHighlightedHitId(hit.id)}
-                onBlur={() => setHighlightedHitId(null)}
-                className={cn(
-                  'opacity-transition rounded-[var(--radius-md)]',
-                  highlightedHitId === hit.id &&
-                    'bg-clay-050 outline-ring outline-2 outline-offset-2',
-                )}
-              >
-                <ResultCard hit={hit} now={now} />
-              </div>
-            ))}
-          </div>
+          <>
+            <div className="flex flex-col gap-6">
+              {listHits.map((hit) => (
+                <div
+                  key={hit.id}
+                  onMouseEnter={() => setHighlightedHitId(hit.id)}
+                  onMouseLeave={() => setHighlightedHitId(null)}
+                  onFocus={() => setHighlightedHitId(hit.id)}
+                  onBlur={() => setHighlightedHitId(null)}
+                  className={cn(
+                    'opacity-transition rounded-[var(--radius-md)]',
+                    highlightedHitId === hit.id &&
+                      'bg-clay-050 outline-ring outline-2 outline-offset-2',
+                  )}
+                >
+                  <ResultCard hit={hit} now={now} />
+                </div>
+              ))}
+            </div>
+
+            {/* §2.1: "Pagination (M2 §3.7) sits at the bottom of this
+                column, inside its own scroll container — unchanged in
+                mechanics." Driven by `listHits`'s own page/total, never
+                the map's up-to-200 window (`Pagination` itself already
+                renders nothing when there's only one page). */}
+            <div className="mt-8">
+              <Pagination
+                page={listPage}
+                totalPages={listTotalPages}
+                hrefForPage={listHrefForPage}
+                onSelect={onListPageChange}
+              />
+            </div>
+          </>
         )}
       </div>
 
@@ -279,9 +345,11 @@ export function MapView({
             card's own mechanism uses, not CSS `lg:hidden` alone — jsdom
             has no CSS engine to hide it there, and a real browser gets
             the identical result either way since this only ever renders
-            client-side, §1.8): the map is the sole visible surface here,
-            so the same outage/empty copy the desktop list column
-            carries renders over the map instead. */}
+            client-side, §1.8): the map is the sole visible surface here
+            — there is no separate list column to carry this copy, so it
+            renders over the map instead, driven by the map's *own* data
+            (`showMapPaneEmpty`, `mapHits`), not the desktop list column's
+            `listHits`. */}
         {!tilesFailed && !isDesktop && (
           <>
             {showListColumnOutage && (
@@ -289,7 +357,7 @@ export function MapView({
                 <MapOverlay variant={{ kind: 'outage', onRetry }} />
               </div>
             )}
-            {showListColumnEmpty && (
+            {showMapPaneEmpty && (
               <div className="absolute inset-0 flex items-center justify-center p-4">
                 <MapOverlay
                   variant={{
