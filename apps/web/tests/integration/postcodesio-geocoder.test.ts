@@ -51,5 +51,26 @@ describe.skipIf(process.env.RUN_EXTERNAL_API_TESTS !== '1')(
 
       expect(result).toBeNull()
     })
+
+    it('searchPlaces resolves real place suggestions from the Places API', async () => {
+      const sut = new PostcodesIoGeocoder()
+
+      const results = await sut.searchPlaces('Reading')
+
+      expect(results.length).toBeGreaterThan(0)
+      const reading = results.find((r) => r.name === 'Reading')
+      expect(reading).toBeDefined()
+      expect(reading?.lat).toBeCloseTo(51.45, 0)
+      expect(reading?.lng).toBeCloseTo(-0.97, 0)
+      expect(reading?.label).toContain('Reading')
+    })
+
+    it('searchPlaces returns an empty array for nonsense input', async () => {
+      const sut = new PostcodesIoGeocoder()
+
+      const results = await sut.searchPlaces('zzzxxxqqqasdkjhasdkjh')
+
+      expect(results).toEqual([])
+    })
   },
 )

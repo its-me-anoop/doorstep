@@ -130,6 +130,8 @@ export async function mapListingToSearchDocument(
 
   return {
     id: listing.id,
+    slug: listing.slug,
+    status: listing.status,
     channel: listing.channel,
     title: listing.title,
     displayAddress: listing.displayAddress,

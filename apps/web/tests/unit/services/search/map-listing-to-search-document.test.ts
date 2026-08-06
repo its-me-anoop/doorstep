@@ -108,6 +108,8 @@ describe('mapListingToSearchDocument', () => {
 
     expect(result).toMatchObject({
       id: 'listing-1',
+      slug: 'charming-terraced-house',
+      status: 'published',
       channel: 'sale',
       title: 'Charming terraced house',
       displayAddress: '12 Example Street, Reading',
@@ -319,4 +321,17 @@ describe('mapListingToSearchDocument', () => {
       ).resolves.toBeDefined()
     },
   )
+
+  it('carries the listing status through to the document verbatim (not hardcoded)', async () => {
+    const storage = makeStorage()
+
+    const result = await mapListingToSearchDocument(
+      listing({ status: 'under_offer' }),
+      [],
+      null,
+      storage,
+    )
+
+    expect(result.status).toBe('under_offer')
+  })
 })

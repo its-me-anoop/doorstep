@@ -30,10 +30,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     )
   }
 
-  const { search } = createServices()
+  const { searchSync } = createServices()
 
   try {
-    const result = await search.rebuildSearchIndex.execute()
+    const result = await searchSync.rebuildSearchIndex.execute()
     return NextResponse.json({ data: result })
   } catch (error) {
     console.error('GET /api/cron/reindex failed:', error)

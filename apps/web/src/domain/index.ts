@@ -35,6 +35,7 @@ export {
 
 export { getDisplayStatus } from './display-status'
 export { formatPrice } from './money'
+export { milesToMetres } from './distance'
 export type { FormatPriceInput } from './money'
 export { slugify } from './slug'
 export { generateListingTitle, generateListingSlug } from './listing-copy'

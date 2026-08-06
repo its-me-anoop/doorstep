@@ -7,3 +7,4 @@
  */
 
 export { SearchGeocode } from './search-geocode'
+export type { GeocodeSuggestion } from './search-geocode'

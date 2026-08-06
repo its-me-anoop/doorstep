@@ -17,6 +17,9 @@
     "db:generate": "pnpm --filter web db:generate",
     "db:migrate": "pnpm --filter web db:migrate",
     "seed": "pnpm --filter web seed",
+    "seed:search-5k": "pnpm --filter web seed:search-5k",
+    "seed:search-5k:clean": "pnpm --filter web seed:search-5k:clean",
+    "bench:search": "pnpm --filter web bench:search",
     "emulator:storage": "firebase emulators:start --only storage --project my-shop-cdeac"
   }
 }

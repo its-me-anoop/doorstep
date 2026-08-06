@@ -13,11 +13,12 @@ function getRequest(search = ''): NextRequest {
   return new NextRequest(`https://doorstep.test/api/v1/geocode${search}`)
 }
 
-// GET /api/v1/geocode — public, no session (PRD §10). M1 scope: the
-// postcode fast path only (services/geocoding/search-geocode.ts) — this
-// suite only proves the route's own responsibilities (parse `q`, call the
-// service, wrap the result), not postcode recognition itself, which is
-// covered where it actually lives: tests/unit/adapters/postcodesio/.
+// GET /api/v1/geocode — public, no session (PRD §10 SRCH-1). This suite
+// only proves the route's own responsibilities (parse `q`, call the
+// service, wrap the result in the versioned envelope) — postcode
+// recognition and place-fallback logic are covered where they actually
+// live: tests/unit/adapters/postcodesio/, tests/unit/adapters/mapbox/ and
+// tests/unit/services/geocoding/.
 describe('GET /api/v1/geocode', () => {
   beforeEach(() => {
     searchGeocode.execute.mockReset()
@@ -43,8 +44,9 @@ describe('GET /api/v1/geocode', () => {
     expect(searchGeocode.execute).not.toHaveBeenCalled()
   })
 
-  it('returns {data: {results}} with a match', async () => {
+  it('returns {data: {version: 2, results}} with a postcode match', async () => {
     const result = {
+      kind: 'postcode',
       lat: 51.4543,
       lng: -0.9781,
       label: 'Reading',
@@ -58,17 +60,38 @@ describe('GET /api/v1/geocode', () => {
     expect(searchGeocode.execute).toHaveBeenCalledWith('RG30 1AA')
     expect(response.status).toBe(200)
     const body = await response.json()
+    expect(body.data.version).toBe(2)
     expect(body.data.results).toEqual([result])
   })
 
-  it('returns {data: {results: []}} for a query the fast path cannot resolve', async () => {
-    searchGeocode.execute.mockResolvedValue([])
+  it('returns place suggestions when the postcode fast path misses', async () => {
+    const place = {
+      kind: 'place',
+      name: 'Reading',
+      label: 'Reading, Berkshire, England',
+      lat: 51.4543,
+      lng: -0.9781,
+      outcode: null,
+    }
+    searchGeocode.execute.mockResolvedValue([place])
     const { GET } = await import('@/app/api/v1/geocode/route')
 
     const response = await GET(getRequest('?q=Reading+town+centre'))
 
     expect(response.status).toBe(200)
     const body = await response.json()
+    expect(body.data.results).toEqual([place])
+  })
+
+  it('returns {data: {version: 2, results: []}} when nothing resolves', async () => {
+    searchGeocode.execute.mockResolvedValue([])
+    const { GET } = await import('@/app/api/v1/geocode/route')
+
+    const response = await GET(getRequest('?q=asdkjhasdkjh'))
+
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.data.version).toBe(2)
     expect(body.data.results).toEqual([])
   })
 

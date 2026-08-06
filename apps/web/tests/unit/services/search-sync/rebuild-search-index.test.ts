@@ -112,6 +112,8 @@ describe('RebuildSearchIndex', () => {
     await searchIndex.upsert([
       {
         id: 'rogue',
+        slug: 'rogue-leftover-doc',
+        status: 'published',
         channel: 'sale',
         title: 'Rogue leftover doc',
         displayAddress: 'Nowhere',

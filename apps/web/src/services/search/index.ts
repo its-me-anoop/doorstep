@@ -2,11 +2,18 @@
  * services/search/
  *
  * The Postgres -> Meilisearch projection's pure mapping half (PRD §8.6):
- * mapListingToSearchDocument. The outbox drain worker that will call it
- * for real, and the /api/v1/search route that will call SearchIndex.search
- * (ports/search-index.ts), are later milestones — this directory is
- * one file and its errors until one of those lands.
+ * mapListingToSearchDocument (called for real by services/search-sync/'s
+ * outbox drain worker and nightly reindex). SearchListings is the other
+ * half — the use case behind GET /api/v1/search (PRD §10): translates a
+ * validated public query into SearchIndex.search's port shape and maps
+ * hits back to the public API's DTO.
  */
 
 export { mapListingToSearchDocument } from './map-listing-to-search-document'
-export { NotIndexableListingError } from './errors'
+export { NotIndexableListingError, SearchUnavailableError } from './errors'
+export { SearchListings } from './search-listings'
+export type {
+  PublicSearchAgency,
+  PublicSearchHit,
+  PublicSearchResult,
+} from './search-listings'

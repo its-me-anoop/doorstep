@@ -16,23 +16,35 @@
  * ListMyListings, DeleteListing — PRD §6.5 LST-2/4/5, M1-DESIGN-SPEC.md §4)
  * the third — all three share the one DrizzleListingRepository instance,
  * since it implements both ListingReader and ListingWriter. `geocoding`
- * (SearchGeocode — PRD §8.6, §10) is the fourth, wired to
- * PostcodesIoGeocoder: the postcode fast path only for M1 — see that
- * adapter's doc comment for the Mapbox fallback TODO(M2). `images`
+ * (SearchGeocode — PRD §8.6, §10 SRCH-1) is the fourth: PostcodesIoGeocoder
+ * is always the `PostcodeGeocoder` (the postcode fast path); the
+ * `PlaceSearcher` half is MapboxGeocoder when MAPBOX_ACCESS_TOKEN is set,
+ * else the same PostcodesIoGeocoder instance falls back to its own
+ * `searchPlaces` (see adapters/mapbox/'s doc comment for the documented
+ * PRD deviation this represents). `geocodeCache` is constructed at MODULE
+ * scope below, not inside this function — see the comment beside that
+ * declaration for why. `images`
  * (RequestImageUpload, ProcessImage, ReorderImages, SetImageKind,
  * DeleteImage, ListListingImages, GetCoverBlurhashes — PRD §6.5 LST-3,
  * §8.7) is the fifth, wired to FirebaseStorageAdapter and the new
  * DrizzlePropertyImageRepository; FirebaseStorageAdapter's constructor
  * reads no env var itself (see that class's doc comment) so this
  * function's own eager-construction-of-everything shape still never
- * throws for a service group a given request doesn't touch. `search`
+ * throws for a service group a given request doesn't touch. `searchSync`
  * (DrainOutbox, RebuildSearchIndex — PRD §8.6's outbox drain worker and
  * nightly reindex) is the sixth, wired to the new DrizzleOutboxRepository
  * and MeilisearchSearchIndex; the latter's constructor is lazy in the
  * same way (reads MEILISEARCH_HOST only once a method actually runs), so
  * it holds the same "never throws for an untouched service group"
- * property. Later milestones add a concrete adapter per port here as each
- * remaining integration (Resend, Mapbox, Upstash) lands. See PRD §8.5.
+ * property. `search` (SearchListings — the use case behind GET
+ * /api/v1/search, PRD §10) is the seventh, sharing that same
+ * MeilisearchSearchIndex instance — this key was renamed from its
+ * previous `search` (which only ever meant search-*sync*) to `searchSync`
+ * when this query-side group was added, freeing `search` for the public
+ * query use case; app/api/cron/outbox-drain and app/api/cron/reindex were
+ * updated to call `searchSync.*` accordingly. Later milestones add a
+ * concrete adapter per port here as each remaining integration (Resend,
+ * Upstash) lands. See PRD §8.5.
  *
  * Note: this constructs a DrizzleUserRepository, which calls
  * adapters/drizzle/client.ts's getDb() — that throws if DATABASE_URL
@@ -54,9 +66,12 @@ import {
   FirebaseAuthGateway,
   FirebaseStorageAdapter,
 } from '@/adapters/firebase'
+import { InMemoryTtlGeocodeCache } from '@/adapters/in-memory-geocode-cache'
+import { MapboxGeocoder } from '@/adapters/mapbox'
 import { MeilisearchSearchIndex } from '@/adapters/meilisearch'
 import { PostcodesIoGeocoder } from '@/adapters/postcodesio'
 import { SystemClock } from '@/adapters/system-clock'
+import type { PlaceSearcher } from '@/ports/geocoder'
 import {
   EstablishSession,
   GetCurrentUser,
@@ -82,6 +97,7 @@ import {
   SubmitListing,
   UpdateListing,
 } from '@/services/listings'
+import { SearchListings } from '@/services/search'
 import { DrainOutbox, RebuildSearchIndex } from '@/services/search-sync'
 
 export interface AuthServices {
@@ -124,14 +140,31 @@ export interface SearchSyncServices {
   rebuildSearchIndex: RebuildSearchIndex
 }
 
+export interface SearchServices {
+  searchListings: SearchListings
+}
+
 export interface Services {
   auth: AuthServices
   listers: ListerServices
   listings: ListingServices
   geocoding: GeocodingServices
   images: ImageServices
-  search: SearchSyncServices
+  search: SearchServices
+  searchSync: SearchSyncServices
 }
+
+/**
+ * Constructed once at module scope, NOT inside createServices() —
+ * InMemoryTtlGeocodeCache's whole value is entries surviving across
+ * requests within one warm server process (see that adapter's doc
+ * comment); a fresh instance per createServices() call (as every other
+ * adapter here deliberately is, for statelessness) would cache nothing
+ * across requests and defeat the point entirely. SystemClock is a
+ * dependency, not a shared resource, so it's fine to construct once
+ * here rather than reusing the one createServices() builds per call.
+ */
+const geocodeCache = new InMemoryTtlGeocodeCache(new SystemClock())
 
 export function createServices(): Services {
   const userRepository = new DrizzleUserRepository(getDb())
@@ -141,7 +174,14 @@ export function createServices(): Services {
   const outboxRepository = new DrizzleOutboxRepository(getDb())
   const authGateway = new FirebaseAuthGateway()
   const clock = new SystemClock()
-  const geocoder = new PostcodesIoGeocoder()
+  const postcodeGeocoder = new PostcodesIoGeocoder()
+  // Mapbox is the PRD's named free-text provider, used only when a token
+  // is configured; postcodes.io's own Places API is the default
+  // otherwise — see adapters/mapbox/'s doc comment for the documented
+  // deviation this represents.
+  const placeSearcher: PlaceSearcher = process.env.MAPBOX_ACCESS_TOKEN
+    ? new MapboxGeocoder()
+    : postcodeGeocoder
   const imageStorage = new FirebaseStorageAdapter()
   const searchIndex = new MeilisearchSearchIndex()
 
@@ -182,7 +222,11 @@ export function createServices(): Services {
       deleteListing: new DeleteListing(listingRepository, listingRepository),
     },
     geocoding: {
-      searchGeocode: new SearchGeocode(geocoder),
+      searchGeocode: new SearchGeocode(
+        postcodeGeocoder,
+        placeSearcher,
+        geocodeCache,
+      ),
     },
     images: {
       requestImageUpload: new RequestImageUpload(
@@ -220,6 +264,9 @@ export function createServices(): Services {
       getCoverBlurhashes: new GetCoverBlurhashes(propertyImageRepository),
     },
     search: {
+      searchListings: new SearchListings(searchIndex),
+    },
+    searchSync: {
       drainOutbox: new DrainOutbox(
         outboxRepository,
         listingRepository,

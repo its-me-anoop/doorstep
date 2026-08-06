@@ -45,6 +45,8 @@ function doc(
 ): ListingSearchDocument {
   const index = FIXTURE_ORDER.indexOf(overrides.id)
   return {
+    slug: `${overrides.id}-slug`,
+    status: 'published',
     title: `Test listing ${overrides.id}`,
     displayAddress: `${overrides.id}, Reading`,
     town: 'Reading',

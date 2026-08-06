@@ -21,6 +21,20 @@
  * (re)indexing, the same "pure re-derivation, not a stored list" choice
  * services/images/attach-image-urls.ts makes for variant URLs.
  *
+ * **Doc-shape v2** (M2's public search API task): `slug` and `status` were
+ * added on top of the PRD's own list above. Neither is filterable or
+ * sortable (FILTERABLE_ATTRIBUTES/SORTABLE_ATTRIBUTES in
+ * adapters/meilisearch/ are unchanged) — both exist purely so
+ * services/search/search-listings.ts's public DTO mapper can build a
+ * listing detail link (`slug`) and badge a Sold STC/Let Agreed card
+ * (`status`, via domain/display-status.ts's getDisplayStatus) straight
+ * from a search hit, with no per-hit Postgres lookup. `status` is
+ * necessarily always `'published'` or `'under_offer'` here — the same
+ * INDEXABLE_STATUSES guard map-listing-to-search-document.ts already
+ * enforces — so it is typed as the full `PropertyStatus` union only
+ * because that is the type ports/listing-repository.ts's `Listing.status`
+ * already carries, not because every value is expected to appear.
+ *
  * `SearchQuery.geo` models the two geo-search paths PRD §8.6 names
  * ("radius search uses `_geoRadius`...; map view uses `_geoBoundingBox`
  * from the visible viewport"). Omitting `geo` entirely is the "no geo
@@ -33,6 +47,7 @@ import type {
   Channel,
   Furnished,
   PriceQualifier,
+  PropertyStatus,
   PropertyType,
   Tenure,
 } from '@/domain/enums'
@@ -48,7 +63,14 @@ export interface ListingSearchAgency {
 
 export interface ListingSearchDocument {
   id: string
+  /** Not filterable/searchable — see this file's "Doc-shape v2" header
+   * note. Carried only so a search hit can link straight to the listing
+   * detail page. */
+  slug: string
   channel: Channel
+  /** Always `'published'` or `'under_offer'` in practice — see this
+   * file's "Doc-shape v2" header note. */
+  status: PropertyStatus
   title: string
   displayAddress: string
   town: string

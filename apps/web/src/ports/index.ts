@@ -60,7 +60,14 @@ export type {
   ImageStorage,
 } from './image-storage'
 export type { EmailMessage, Mailer } from './mailer'
-export type { GeocodeResult, Geocoder } from './geocoder'
+export type {
+  GeocodeResult,
+  PlaceSuggestion,
+  PostcodeGeocoder,
+  PlaceSearcher,
+  Geocoder,
+} from './geocoder'
+export type { GeocodeCache } from './geocode-cache'
 export type { RateLimitResult, RateLimiter } from './rate-limiter'
 export type { Clock } from './clock'
 export type { DecodedIdentity, RoleClaims, AuthGateway } from './auth-gateway'

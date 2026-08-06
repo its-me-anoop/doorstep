@@ -1,9 +1,10 @@
 /**
  * Errors thrown by services/search/*. Same { name, ...context } shape as
- * services/listings/errors.ts and services/images/errors.ts, though
- * nothing maps this one to a route response yet — map-listing-to-search-
- * document.ts has no route calling it directly in this milestone (the
- * outbox drain worker that will is later work).
+ * services/listings/errors.ts and services/images/errors.ts.
+ * NotIndexableListingError has no route mapping it directly — the outbox
+ * drain worker (services/search-sync/) is its only caller. SearchUnavailableError
+ * is mapped by GET /api/v1/search to a 503 (PRD §7.6's graceful
+ * degradation).
  */
 
 import type { PropertyStatus } from '@/domain/enums'
@@ -30,5 +31,22 @@ export class NotIndexableListingError extends Error {
     this.name = 'NotIndexableListingError'
     this.id = id
     this.status = status
+  }
+}
+
+/**
+ * SearchListings (services/search/search-listings.ts) throws this when
+ * SearchIndex.healthy() reports false, or when SearchIndex.search itself
+ * throws — Meilisearch being briefly unreachable is an expected failure
+ * mode (PRD §7.6: "graceful degradation" when the search index is down),
+ * not a 500. GET /api/v1/search maps this to
+ * `503 { error: { code: 'search_unavailable' } }`; the UI phase renders
+ * the friendly outage state from that response.
+ */
+export class SearchUnavailableError extends Error {
+  constructor(cause?: unknown) {
+    super('The search index is temporarily unavailable')
+    this.name = 'SearchUnavailableError'
+    this.cause = cause
   }
 }

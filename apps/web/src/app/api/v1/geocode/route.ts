@@ -1,15 +1,19 @@
 /**
- * GET /api/v1/geocode?q= — PRD §10: "Suggestions: postcode fast-path +
- * Mapbox place results". Public — no session required. M1 scope is the
- * postcode fast path only: a query that isn't a recognisable UK postcode
- * or outcode resolves to no results rather than an error (see
- * adapters/postcodesio/'s doc comment) — full-text Mapbox place
- * suggestions are TODO(M2), tracked there and in
- * services/geocoding/search-geocode.ts's doc comment, not built here.
+ * GET /api/v1/geocode?q= — PRD §10 SRCH-1: "Suggestions: postcode
+ * fast-path + Mapbox place results". Public — no session required.
  *
  * Thin per PRD §8.5: parse `q` with zod, call SearchGeocode, map the
- * result to `{ data: { results } }` — plural, matching the PRD's
- * "Suggestions" framing even though M1 only ever returns 0 or 1 result.
+ * result to `{ data: { version: 2, results } }`.
+ *
+ * **Doc-shape v2**: M1 returned `{ data: { results: GeocodeResult[] } }`
+ * — an undiscriminated array with 0 or 1 entries (the postcode fast path
+ * only). M2 adds the free-text place fallback (services/geocoding/
+ * search-geocode.ts), so `results` can now hold several entries of two
+ * different shapes; `version: 2` and each result's own `kind` field
+ * (`'postcode' | 'place'`) are the version bump this represents — a
+ * client written against v1's implicit "always 0-or-1, always the same
+ * shape" assumption needs updating, hence the explicit version marker
+ * rather than a silent shape change.
  */
 
 import { NextResponse, type NextRequest } from 'next/server'
@@ -38,7 +42,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   try {
     const results = await geocoding.searchGeocode.execute(parsed.data.q)
-    return NextResponse.json({ data: { results } })
+    return NextResponse.json({ data: { version: 2, results } })
   } catch (error) {
     console.error('GET /api/v1/geocode failed:', error)
     return apiError(500, 'internal_error', 'Something went wrong on our side')

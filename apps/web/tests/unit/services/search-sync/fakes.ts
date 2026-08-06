@@ -14,6 +14,7 @@ import type {
   ListingSearchDocument,
   SearchFacetCounts,
   SearchIndex,
+  SearchQuery,
   SearchResult,
 } from '@/ports/search-index'
 
@@ -71,6 +72,11 @@ export class FakeSearchIndex implements SearchIndex {
   readonly deleteCalls: string[][] = []
   ensureSettingsCallCount = 0
   clearCallCount = 0
+  /** The most recent query passed to `search()` — lets
+   * tests/unit/services/search/search-listings.test.ts assert on the
+   * SearchQuery a translation step built, without every test having to
+   * override `search` itself. */
+  lastSearchQuery: SearchQuery | undefined
   private pendingUpsertError: Error | null = null
   private pendingDeleteError: Error | null = null
   private countOverride: number | null = null
@@ -104,7 +110,8 @@ export class FakeSearchIndex implements SearchIndex {
     this.documents.clear()
   }
 
-  async search(): Promise<SearchResult> {
+  async search(query: SearchQuery): Promise<SearchResult> {
+    this.lastSearchQuery = query
     return {
       hits: [...this.documents.values()],
       totalHits: this.documents.size,

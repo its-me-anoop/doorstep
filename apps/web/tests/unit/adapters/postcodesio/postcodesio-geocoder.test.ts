@@ -161,4 +161,109 @@ describe('PostcodesIoGeocoder', () => {
     expect(result).toBeNull()
     expect(fetchMock).not.toHaveBeenCalled()
   })
+
+  describe('searchPlaces', () => {
+    it('maps GET /places results to PlaceSuggestion[]', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(200, {
+          status: 200,
+          result: [
+            {
+              name_1: 'Reading',
+              county_unitary: 'Reading',
+              district_borough: null,
+              region: 'South East',
+              country: 'England',
+              local_type: 'Town',
+              latitude: 51.4543,
+              longitude: -0.9781,
+            },
+          ],
+        }),
+      )
+      const sut = new PostcodesIoGeocoder()
+
+      const results = await sut.searchPlaces('Reading')
+
+      expect(results).toEqual([
+        {
+          name: 'Reading',
+          label: 'Reading, South East, England',
+          lat: 51.4543,
+          lng: -0.9781,
+          outcode: null,
+        },
+      ])
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://api.postcodes.io/places?q=Reading',
+      )
+    })
+
+    it('does not repeat name_1 in the label when it duplicates county_unitary', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(200, {
+          status: 200,
+          result: [
+            {
+              name_1: 'Caversham',
+              county_unitary: null,
+              district_borough: 'Reading',
+              region: 'South East',
+              country: 'England',
+              local_type: 'Suburban Area',
+              latitude: 51.465,
+              longitude: -0.9723,
+            },
+          ],
+        }),
+      )
+      const sut = new PostcodesIoGeocoder()
+
+      const results = await sut.searchPlaces('Caversham')
+
+      expect(results[0]?.label).toBe('Caversham, Reading, South East, England')
+    })
+
+    it('URL-encodes the query', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(200, { status: 200, result: [] }),
+      )
+      const sut = new PostcodesIoGeocoder()
+
+      await sut.searchPlaces('St Mary Bourne')
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://api.postcodes.io/places?q=St%20Mary%20Bourne',
+      )
+    })
+
+    it('returns an empty array when the API reports no matches', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(200, { status: 200, result: null }),
+      )
+      const sut = new PostcodesIoGeocoder()
+
+      const results = await sut.searchPlaces('asdkjhasdkjh')
+
+      expect(results).toEqual([])
+    })
+
+    it('returns an empty array on a non-ok response rather than throwing', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(500, { status: 500 }))
+      const sut = new PostcodesIoGeocoder()
+
+      const results = await sut.searchPlaces('Reading')
+
+      expect(results).toEqual([])
+    })
+
+    it('returns an empty array for a blank query without calling the API', async () => {
+      const sut = new PostcodesIoGeocoder()
+
+      const results = await sut.searchPlaces('   ')
+
+      expect(results).toEqual([])
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+  })
 })

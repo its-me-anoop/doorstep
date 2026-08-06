@@ -6,7 +6,7 @@ const isAuthorizedCronRequest = vi.fn()
 
 vi.mock('@/lib/composition', () => ({
   createServices: () => ({
-    search: { rebuildSearchIndex },
+    searchSync: { rebuildSearchIndex },
   }),
 }))
 
