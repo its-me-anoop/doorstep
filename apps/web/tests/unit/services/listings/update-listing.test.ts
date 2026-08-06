@@ -150,13 +150,38 @@ describe('UpdateListing', () => {
     expect(result.description).toBe('Admin edit.')
   })
 
-  it('rejects a channel change', async () => {
+  it('rejects a channel change once the listing has left draft', async () => {
     const { sut, listingRepository } = makeSut()
-    listingRepository.seed(listing({ channel: 'sale' }))
+    listingRepository.seed(
+      listing({ channel: 'sale', status: 'pending_review' }),
+    )
 
     await expect(
       sut.execute(user(), 'listing-1', patch({ channel: 'rent' })),
     ).rejects.toThrow(ListingChannelImmutableError)
+  })
+
+  // The create-listing wizard always bootstraps a fresh draft with a
+  // placeholder channel ('sale') before the user ever sees step 1
+  // (components/features/listings/new-listing-redirect.tsx) — wizard
+  // step 1's own "For sale"/"To rent" tiles are the user's *real* choice,
+  // saved via the same autosave PATCH this service backs. A draft's
+  // channel has to stay changeable, or every "To rent" choice would
+  // silently fail to persist (autosave swallows the resulting error, so
+  // nothing downstream — not even the eventual submit — would look wrong
+  // until submitListingSchema rejected the still-'sale' stored draft for
+  // a reason that has nothing to do with the real problem).
+  it('allows a channel change while the listing is still a draft', async () => {
+    const { sut, listingRepository } = makeSut()
+    listingRepository.seed(listing({ channel: 'sale', status: 'draft' }))
+
+    const result = await sut.execute(
+      user(),
+      'listing-1',
+      patch({ channel: 'rent', price: 1200 }),
+    )
+
+    expect(result.channel).toBe('rent')
   })
 
   it.each(['completed', 'hidden', 'archived'] as const)(

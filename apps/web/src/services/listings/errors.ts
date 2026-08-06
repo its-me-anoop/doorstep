@@ -28,11 +28,18 @@ export class ListingNotEditableError extends Error {
 }
 
 /**
- * UpdateListing rejects any PATCH whose validated `channel` does not match
- * the stored listing's channel — channel (sale/rent) is immutable after
- * creation (ports/listing-repository.ts's ListingUpdateFields excludes it
- * from the writer entirely). Rejecting a mismatch explicitly, rather than
- * silently ignoring the client's `channel` value, closes a subtler gap:
+ * UpdateListing rejects a PATCH whose validated `channel` does not match
+ * the stored listing's channel, for any listing that has left `draft` —
+ * channel (sale/rent) is immutable from the moment a listing is first
+ * submitted (update-listing.ts's `listing.status !== 'draft'` guard).
+ * A still-draft listing is deliberately exempt: every fresh draft is
+ * bootstrapped with a placeholder channel before the user ever answers
+ * wizard step 1 for real (new-listing-redirect.tsx), and that real
+ * choice has to reach the stored row through this same PATCH — see
+ * ports/listing-repository.ts's ListingUpdateFields doc comment.
+ *
+ * Rejecting a *post-draft* mismatch explicitly, rather than silently
+ * ignoring the client's `channel` value, closes a subtler gap:
  * lib/validation/listing.ts's price-range check validates `price` against
  * whatever `channel` the request body claims, so a request claiming the
  * wrong channel could otherwise sail through a price bound meant for the
@@ -40,7 +47,7 @@ export class ListingNotEditableError extends Error {
  */
 export class ListingChannelImmutableError extends Error {
   constructor() {
-    super('Listing channel cannot be changed after creation')
+    super('Listing channel cannot be changed once submitted')
     this.name = 'ListingChannelImmutableError'
   }
 }

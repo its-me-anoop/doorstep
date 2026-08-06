@@ -75,12 +75,23 @@ export type NewListingDraft = Omit<
 >
 
 /**
- * Fields a PATCH may change. Excludes everything that is either immutable
- * after creation (`listerId`, `agencyId`, `channel` — changing sale/rent
- * on an existing listing is a new listing, not an edit) or exclusively
- * server-managed (`status` and the status-machine timestamps move only
- * through transitionWithOutbox; `title`/`slug` are derived, never
- * client-edited — see domain/listing-copy.ts's doc comment).
+ * Fields a PATCH may change. Excludes everything either always immutable
+ * (`listerId`, `agencyId` — moving a listing to a different lister/agency
+ * is a new listing, not an edit) or exclusively server-managed (`status`
+ * and the status-machine timestamps move only through
+ * transitionWithOutbox; `title`/`slug` are derived, never client-edited —
+ * see domain/listing-copy.ts's doc comment).
+ *
+ * `channel` stays in this type (the writer will persist it) even though
+ * it is immutable *once a listing has left draft* — the create-listing
+ * wizard bootstraps every fresh draft with a placeholder channel
+ * (new-listing-redirect.tsx) and relies on the user's real step-1 choice
+ * reaching the stored row via this same PATCH. UpdateListing
+ * (services/listings/update-listing.ts) is what actually enforces the
+ * "immutable past draft" rule — a status-conditional business rule, not
+ * a shape a repository-level type can express — by rejecting a channel
+ * mismatch for any non-draft status before a change ever reaches this
+ * writer.
  */
 export type ListingUpdateFields = Partial<
   Omit<
@@ -88,7 +99,6 @@ export type ListingUpdateFields = Partial<
     | 'id'
     | 'listerId'
     | 'agencyId'
-    | 'channel'
     | 'status'
     | 'title'
     | 'slug'

@@ -66,7 +66,14 @@ export class UpdateListing {
       throw new ForbiddenError('You do not manage this listing')
     }
 
-    if (changes.channel !== listing.channel) {
+    // Immutable once the listing has left draft, not from creation: every
+    // fresh draft is bootstrapped with a placeholder channel
+    // (new-listing-redirect.tsx) before the user ever answers wizard step
+    // 1 for real, and that real answer reaches the stored row through this
+    // same PATCH. Rejecting a mismatch here for a still-draft listing
+    // would silently strand the user's actual channel choice — see
+    // ports/listing-repository.ts's ListingUpdateFields doc comment.
+    if (listing.status !== 'draft' && changes.channel !== listing.channel) {
       throw new ListingChannelImmutableError()
     }
 
@@ -95,10 +102,10 @@ export class UpdateListing {
   }
 
   private toUpdateFields(changes: DraftListingInput): ListingUpdateFields {
-    // `channel` is validated above but never forwarded to the writer —
-    // ListingUpdateFields excludes it (immutable after creation).
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- dropped by design, see comment above
-    const { channel, ...fields } = changes
-    return fields
+    // `channel` is forwarded as-is (unlike title/slug/status, which
+    // DraftListingInput never even carries) — the guard above already
+    // ensures it's either unchanged or the listing is still a draft, so
+    // by this point writing it is always safe.
+    return changes
   }
 }
