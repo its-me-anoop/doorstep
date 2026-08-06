@@ -161,6 +161,49 @@ describe('MapView', () => {
     expect(screen.getByText('Oxford Road, Reading')).toBeInTheDocument()
   })
 
+  // e2e hook (tests/e2e/m3.parity.spec.ts): the map has no accessible,
+  // real DOM per-pin representation to read ids back from (pins are
+  // aria-hidden HTML markers outside the React tree, §4) — this
+  // `data-listing-ids` attribute on the map view's own root is the one
+  // stable, structural way an outside test can read "what listing set is
+  // this map currently backed by" without driving a real cluster-expand
+  // gesture. Slugs, not ids: the same public identifier
+  // `a[href="/property/{slug}"]` already exposes in the list grid
+  // (result-card.tsx), so a parity test can compare the two sets
+  // directly with no id/slug translation step of its own.
+  it('exposes the current hits as slugs on the map view root (data-listing-ids), for e2e parity checks', async () => {
+    render(
+      <MapView
+        {...baseProps({
+          hits: [
+            hit({ id: 'pr_1', slug: 'oxford-road-flat' }),
+            hit({
+              id: 'pr_2',
+              slug: 'kings-road-house',
+              geo: { lat: 51.47, lng: -0.96 },
+            }),
+          ],
+        })}
+      />,
+    )
+    await flush()
+
+    const root = screen.getByTestId('map-view')
+    expect(JSON.parse(root.getAttribute('data-listing-ids') ?? '[]')).toEqual([
+      'oxford-road-flat',
+      'kings-road-house',
+    ])
+  })
+
+  it('clears data-listing-ids during an outage, matching the pin-less map (§1.8)', async () => {
+    render(<MapView {...baseProps({ outage: true })} />)
+    await flush()
+    expect(screen.getByTestId('map-view')).toHaveAttribute(
+      'data-listing-ids',
+      '[]',
+    )
+  })
+
   it('shows the outage panel in the list column and clears map pins during an outage', async () => {
     const onRetry = vi.fn()
     render(<MapView {...baseProps({ outage: true, onRetry })} />)

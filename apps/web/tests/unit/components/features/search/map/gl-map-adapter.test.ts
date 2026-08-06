@@ -220,6 +220,22 @@ describe('createGlMapAdapter', () => {
     expect(container.getAttribute('aria-hidden')).not.toBe('true')
   })
 
+  // WCAG 4.1.2 (found by tests/e2e/m3.parity.spec.ts's real-pin axe scan
+  // against a real MapLibre instance, not this fake): both MapLibre and
+  // Mapbox GL give their own canvas `tabindex="0"` by default so it's
+  // independently keyboard-pannable — content that stays in the tab
+  // order while its aria-hidden ancestor-or-self hides it from the
+  // accessibility tree is exactly the "aria-hidden-focus" violation axe
+  // flags. Pins/clusters already strip their own tabindex for the same
+  // reason (pin-marker.ts/cluster-marker.ts's `tabIndex = -1`); the base
+  // canvas needs the identical treatment, which the fake canvas's own
+  // (library-default-free) starting state doesn't surface on its own —
+  // asserted directly here instead.
+  it('also removes the canvas from tab order — an aria-hidden element must never stay focusable (WCAG 4.1.2)', () => {
+    const { map } = init(fakeGlLibrary())
+    expect(map.canvas.getAttribute('tabindex')).toBe('-1')
+  })
+
   it('adds the clustered hits source once the map loads', () => {
     const { map } = init(fakeGlLibrary())
     map.emit('load')

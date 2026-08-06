@@ -215,6 +215,13 @@ jobs:
           # Admin SDK credential check.
           FIREBASE_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\nMIIBVgIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEA0Z\n-----END PRIVATE KEY-----\n'
         run: pnpm build
+      # PRD §7.1 / §13's M3 exit criterion, structurally encoded rather
+      # than eyeballed off a bundle-size diff: reads this same build's
+      # own .next output (no second build) and fails if any list-tier
+      # route's client bundle references the MapLibre/Mapbox GL chunk —
+      # see scripts/assert-map-bundle-isolation.ts's own doc comment.
+      - name: Assert the map bundle stays isolated from the list routes
+        run: pnpm assert:map-bundle-isolation
 
   e2e:
     needs: [build]

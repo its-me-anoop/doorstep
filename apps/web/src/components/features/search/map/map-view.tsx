@@ -183,7 +183,26 @@ export function MapView({
   const showListColumnEmpty = !outage && hits.length === 0
 
   return (
-    <div className="flex flex-col lg:h-[clamp(480px,75vh,820px)] lg:flex-row">
+    <div
+      // e2e hook (tests/e2e/m3.parity.spec.ts), not a styling/behaviour
+      // hook: real pins are aria-hidden HTML markers mounted outside
+      // React by the map library itself (§4), so there is no accessible
+      // per-pin DOM an outside test could read ids back from without
+      // driving a real cluster-expand gesture per pin. `data-listing-ids`
+      // publishes the same slug list `geojson.ts` fed into the pins/
+      // cluster source — the exact array behind "map and list return
+      // identical results for the same criteria" (PRD §13) — as one
+      // stable, always-present attribute instead. Slugs (not ids): the
+      // same public identifier `a[href="/property/{slug}"]` already
+      // exposes in the list grid (result-card.tsx), so a parity test
+      // compares the two sets with no id/slug translation of its own.
+      // Empty during an outage, mirroring the pin-less map (§1.8).
+      data-testid="map-view"
+      data-listing-ids={JSON.stringify(
+        outage ? [] : hits.map((hit) => hit.slug),
+      )}
+      className="flex flex-col lg:h-[clamp(480px,75vh,820px)] lg:flex-row"
+    >
       {/* §2.1 desktop list column — hidden on mobile, where the map is
           the sole visible surface. */}
       <div className="hidden lg:block lg:min-w-[360px] lg:flex-[1_1_42%] lg:overflow-y-auto lg:pr-2">

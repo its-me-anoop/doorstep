@@ -23,6 +23,7 @@
     "seed:search-5k:clean": "tsx scripts/seed-search-5k.ts --clean",
     "bench:search": "tsx scripts/search-bench.ts",
     "reindex:local": "tsx scripts/reindex-local.ts",
+    "assert:map-bundle-isolation": "tsx scripts/assert-map-bundle-isolation.ts",
     "backfill:storage-emulator": "tsx scripts/backfill-storage-emulator.ts"
   },
   "dependencies": {

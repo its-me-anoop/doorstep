@@ -20,6 +20,7 @@
     "seed:search-5k": "pnpm --filter web seed:search-5k",
     "seed:search-5k:clean": "pnpm --filter web seed:search-5k:clean",
     "bench:search": "pnpm --filter web bench:search",
+    "assert:map-bundle-isolation": "pnpm --filter web assert:map-bundle-isolation",
     "emulator:storage": "firebase emulators:start --only storage --project my-shop-cdeac"
   }
 }

@@ -272,7 +272,15 @@ export function createGlMapAdapter(
       // explicit rather than left to each library's own default. Not
       // applied to `container` itself, which would also hide the mini
       // card popup/panel this same container hosts.
-      map.getCanvas().setAttribute('aria-hidden', 'true')
+      const canvas = map.getCanvas()
+      canvas.setAttribute('aria-hidden', 'true')
+      // Both MapLibre and Mapbox GL give the canvas `tabindex="0"` by
+      // default (independent keyboard panning) — left alone, that's a
+      // WCAG 4.1.2 violation (real, axe-confirmed: content must never
+      // stay focusable inside an aria-hidden subtree). Pins/clusters
+      // already strip their own tabindex for the identical reason
+      // (pin-marker.ts/cluster-marker.ts); the canvas needs the same.
+      canvas.setAttribute('tabindex', '-1')
 
       map.on('load', () => {
         map?.addSource(SOURCE_ID, {
