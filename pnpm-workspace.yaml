@@ -22,3 +22,15 @@ onlyBuiltDependencies:
   - protobufjs
   - sharp
   - unrs-resolver
+
+# Vercel builds and runs on linux-x64 while dev machines are darwin-arm64.
+# Without both architectures in the lockfile's optional-dependency set,
+# sharp's @img/sharp-libvips-linux-x64 binaries are absent from the deployed
+# bundle and sharp fails to load at runtime (ERR_DLOPEN_FAILED, libvips).
+supportedArchitectures:
+  os:
+    - current
+    - linux
+  cpu:
+    - current
+    - x64

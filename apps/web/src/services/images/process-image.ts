@@ -45,8 +45,6 @@
  *     src>` at once processing completes.
  */
 
-import sharp from 'sharp'
-
 import {
   computeBlurhash,
   originalImagePath,
@@ -78,6 +76,20 @@ const BLURHASH_THUMBNAIL_SIZE = 32
 const WEBP_QUALITY = 80
 const AVIF_QUALITY = 60
 
+/**
+ * sharp is loaded via dynamic import(), never at module scope, for the
+ * same reason firebase-admin is (adapters/firebase/admin-app.ts): it is
+ * a native module whose platform binaries may be missing or unloadable
+ * in a given runtime, and a top-level import takes down every route that
+ * transitively loads the composition root — not just image processing.
+ * Observed in production: sharp's linux binding failed to load on the
+ * lambda and 500'd the entire site, including pages that never touch
+ * images.
+ */
+async function loadSharp(): Promise<(typeof import('sharp'))['default']> {
+  return (await import('sharp')).default
+}
+
 export class ProcessImage {
   constructor(
     private readonly listingReader: ListingReader,
@@ -106,6 +118,7 @@ export class ProcessImage {
     const originalBytes = await this.imageStorage.get(originalPath)
     if (!originalBytes) throw new OriginalImageNotFoundError(imageId)
 
+    const sharp = await loadSharp() // see loadSharp's doc comment
     const { data: corrected, info } = await sharp(originalBytes)
       .rotate()
       .toBuffer({ resolveWithObject: true })
@@ -142,6 +155,7 @@ export class ProcessImage {
   }
 
   private async computeBlurhashFor(corrected: Buffer): Promise<string> {
+    const sharp = await loadSharp()
     const { data, info } = await sharp(corrected)
       .resize(BLURHASH_THUMBNAIL_SIZE, BLURHASH_THUMBNAIL_SIZE, {
         fit: 'inside',
@@ -160,6 +174,7 @@ export class ProcessImage {
     width: number,
     format: 'webp' | 'avif',
   ): Promise<void> {
+    const sharp = await loadSharp()
     const resized = sharp(corrected).resize({ width })
     const bytes =
       format === 'webp'
