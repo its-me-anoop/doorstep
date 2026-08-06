@@ -13,15 +13,14 @@
  * property's ListingSearchDocument is fully derivable from the
  * generator's own output with zero I/O (no images, no agency — every
  * bench property is deliberately image-less, see search-bench-data.ts),
- * so building it directly is both simpler and correct. It also sidesteps
- * a real, pre-existing gap this script surfaced: RebuildSearchIndex
- * re-maps EVERY indexable listing, including this environment's other
- * seeded rows (scripts/seed.ts's fixed 20), and several of those
- * reference Firebase Storage images that don't resolve against this
- * local dev environment's storage bucket — a full rebuild throws before
- * ever reaching the bench documents. That is a separate, worth-fixing
- * issue in RebuildSearchIndex/local environment setup, not something
- * this bench-evidence script should have to depend on being fixed first.
+ * so building it directly is both simpler and correct, and (unlike a
+ * full RebuildSearchIndex run) never touches this environment's other
+ * seeded rows (scripts/seed.ts's fixed 20) at all. RebuildSearchIndex
+ * itself now logs-and-skips, rather than throws on, a listing whose
+ * image reference doesn't resolve against this local dev environment's
+ * storage bucket (see that file's own header comment) — this script's
+ * choice to upsert directly is still the right one on its own merits,
+ * just no longer a workaround for a bug in the shared use case.
  *
  * Guarded non-prod, same pattern as scripts/seed.ts. Idempotent the same
  * way too: every run first deletes any existing bench rows from BOTH

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { isAuthorizedCronRequest } from '@/lib/verify-cron-request'
 
@@ -7,6 +7,10 @@ function headers(entries: Record<string, string> = {}): Headers {
 }
 
 describe('isAuthorizedCronRequest', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('authorizes a correct CRON_SECRET bearer token, even outside production', () => {
     const result = isAuthorizedCronRequest(
       headers({ authorization: 'Bearer s3cret' }),
@@ -38,18 +42,10 @@ describe('isAuthorizedCronRequest', () => {
     expect(result).toBe(false)
   })
 
-  it('authorizes the x-vercel-cron header alone in production', () => {
+  it('rejects the x-vercel-cron header alone, even in production — it is an informational marker any caller can spoof, never a valid auth path on its own', () => {
     const result = isAuthorizedCronRequest(headers({ 'x-vercel-cron': '1' }), {
-      CRON_SECRET: undefined,
+      CRON_SECRET: 's3cret',
       NODE_ENV: 'production',
-    })
-    expect(result).toBe(true)
-  })
-
-  it('rejects the x-vercel-cron header outside production (not a verified signature — spoofable by any caller)', () => {
-    const result = isAuthorizedCronRequest(headers({ 'x-vercel-cron': '1' }), {
-      CRON_SECRET: undefined,
-      NODE_ENV: 'development',
     })
     expect(result).toBe(false)
   })
@@ -74,5 +70,47 @@ describe('isAuthorizedCronRequest', () => {
     } finally {
       process.env.CRON_SECRET = original
     }
+  })
+
+  it('loudly logs a misconfiguration error when CRON_SECRET is unset in production — every request is rejected until it is fixed', () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined)
+
+    const result = isAuthorizedCronRequest(headers({ 'x-vercel-cron': '1' }), {
+      CRON_SECRET: undefined,
+      NODE_ENV: 'production',
+    })
+
+    expect(result).toBe(false)
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.stringContaining('CRON_SECRET'),
+    )
+  })
+
+  it('does not log the misconfiguration error outside production', () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined)
+
+    isAuthorizedCronRequest(headers(), {
+      CRON_SECRET: undefined,
+      NODE_ENV: 'development',
+    })
+
+    expect(consoleError).not.toHaveBeenCalled()
+  })
+
+  it('does not log the misconfiguration error when CRON_SECRET is set', () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined)
+
+    isAuthorizedCronRequest(headers(), {
+      CRON_SECRET: 's3cret',
+      NODE_ENV: 'production',
+    })
+
+    expect(consoleError).not.toHaveBeenCalled()
   })
 })

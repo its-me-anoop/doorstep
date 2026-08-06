@@ -1,29 +1,31 @@
 /**
  * isAuthorizedCronRequest — the auth check shared by
  * app/api/cron/outbox-drain and app/api/cron/reindex (PRD §8.6's Vercel
- * Cron worker and nightly reindex). Two independent ways to pass:
+ * Cron worker and nightly reindex). Fails closed: the ONLY way to pass is
+ * `Authorization: Bearer ${CRON_SECRET}` — Vercel attaches this header
+ * automatically to every cron-triggered request once the project has a
+ * CRON_SECRET environment variable set (Vercel's own documented "Securing
+ * cron jobs" pattern). CRON_SECRET is a value only this deployment and
+ * Vercel's scheduler know, so a correct match is the one real security
+ * boundary here.
  *
- *  1. `Authorization: Bearer ${CRON_SECRET}` — Vercel attaches this header
- *     automatically to every cron-triggered request once the project has
- *     a CRON_SECRET environment variable set (Vercel's own documented
- *     "Securing cron jobs" pattern). This is the real security boundary:
- *     CRON_SECRET is a value only this deployment and Vercel's scheduler
- *     know, so a correct match proves the request came from the
- *     configured cron trigger and not an arbitrary caller.
- *  2. `x-vercel-cron` header present, but ONLY when NODE_ENV is
- *     'production'. Vercel's edge sets this header on cron-triggered
- *     requests as an informational marker, not a cryptographic proof —
- *     any caller can send an arbitrary header with that name, so this
- *     path is intentionally the weaker of the two and exists only as a
- *     fallback for a production deployment that has not (yet) set
- *     CRON_SECRET. It is gated to production so a local dev server or a
- *     preview deploy can never be tricked into treating a hand-crafted
- *     header as an authorized cron call — CRON_SECRET is the only path
- *     that works anywhere else.
+ * A previous version also accepted a bare `x-vercel-cron` header (gated
+ * to NODE_ENV === 'production') as a fallback for a deployment that
+ * hadn't set CRON_SECRET yet. That header is Vercel's own informational
+ * marker, not a cryptographic proof — any external caller can send an
+ * arbitrary header with that name — so accepting it, even
+ * production-gated, meant a project that silently forgot to configure
+ * CRON_SECRET in production became fully unauthenticated rather than
+ * fully locked out. Removed: an unset CRON_SECRET must reject every
+ * request, not degrade to a spoofable one.
  *
- * Both routes should still set CRON_SECRET in every environment that
- * matters (see .env.example) — path 2 is deliberately the fallback, not
- * the recommended configuration.
+ * Because that misconfiguration (production, but CRON_SECRET unset) is
+ * now a silent total lockout rather than a silent total bypass, it is
+ * loudly logged here every time it's hit, so it surfaces in Vercel's
+ * function logs immediately rather than being discovered only when the
+ * outbox backlog or reindex staleness alert (PRD §7.7) eventually fires.
+ * Both routes must still set CRON_SECRET in every environment that
+ * matters (see .env.example).
  */
 
 export function isAuthorizedCronRequest(
@@ -31,8 +33,14 @@ export function isAuthorizedCronRequest(
   env: Record<string, string | undefined> = process.env,
 ): boolean {
   const secret = env.CRON_SECRET
-  if (secret && headers.get('authorization') === `Bearer ${secret}`) {
-    return true
+  if (!secret) {
+    if (env.NODE_ENV === 'production') {
+      console.error(
+        'isAuthorizedCronRequest: CRON_SECRET is not configured in ' +
+          'production — every cron request will be rejected until it is set.',
+      )
+    }
+    return false
   }
-  return env.NODE_ENV === 'production' && headers.has('x-vercel-cron')
+  return headers.get('authorization') === `Bearer ${secret}`
 }

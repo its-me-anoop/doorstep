@@ -1,7 +1,10 @@
 /**
  * `/to-rent/{area}` — the rent-channel counterpart of
  * `/for-sale/[area]/page.tsx`; see that file's doc comment for the full
- * ISR/caching reasoning (identical here, channel aside).
+ * rendering-strategy reasoning (identical here, channel aside — this
+ * route is fully dynamic for the same `searchParams`-access reason, not
+ * ISR, and carries no `revalidate` export for the same reason that one
+ * was removed).
  */
 
 import type { Metadata } from 'next'
@@ -10,8 +13,6 @@ import { notFound } from 'next/navigation'
 import { SearchResultsPage } from '@/components/features/search/search-results-page'
 import { AREAS, findAreaBySlug } from '@/lib/areas'
 import { buildSearchHeading } from '@/lib/search-heading'
-
-export const revalidate = 86400
 
 interface ToRentAreaPageProps {
   params: Promise<{ area: string }>

@@ -176,9 +176,68 @@ describe('RebuildSearchIndex', () => {
     warn.mockRestore()
   })
 
-  it('propagates a mapping error (e.g. a corrupted publishedAt invariant) rather than swallowing it', async () => {
-    listingRepository.seed(listing({ publishedAt: null }))
+  it('logs and skips a listing whose document cannot be built (e.g. a corrupted publishedAt invariant), rather than failing the whole run', async () => {
+    listingRepository.seed(listing({ id: 'bad', publishedAt: null }))
+    listingRepository.seed(listing({ id: 'good' }))
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined)
 
-    await expect(rebuildSearchIndex.execute()).rejects.toThrow()
+    const result = await rebuildSearchIndex.execute()
+
+    expect(result.indexed).toBe(1)
+    expect([...searchIndex.documents.keys()]).toEqual(['good'])
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('bad'))
+    // The skipped listing shows up as drift, not a silent loss — the
+    // existing count-mismatch warning (already tested above) is exactly
+    // PRD §7.7's "count-mismatch alert catches sync bugs" doing its job.
+    expect(result.drift.postgresCount).toBe(2)
+    expect(result.drift.meiliCountAfter).toBe(1)
+    consoleError.mockRestore()
+  })
+
+  it('logs and skips a listing whose cover image cannot be resolved (e.g. a missing storage object), rather than failing the whole page — the exact failure mode this behaviour guards against', async () => {
+    listingRepository.seed(listing({ id: 'bad' }))
+    listingRepository.seed(listing({ id: 'good' }))
+    imageRepository.seed({
+      id: 'img-1',
+      propertyId: 'bad',
+      kind: 'photo',
+      storagePath: 'listings/bad/original/img-1',
+      position: 0,
+      width: 800,
+      height: 600,
+      blurhash: 'L6PZfSjE.AyE_3t7t7R**0o#DgR4',
+      altText: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    // Deliberately never `put()` the variant into imageStorage, so
+    // publicUrl() throws exactly like a missing object / revoked
+    // download token would against a real bucket.
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined)
+
+    const result = await rebuildSearchIndex.execute()
+
+    expect(result.indexed).toBe(1)
+    expect([...searchIndex.documents.keys()]).toEqual(['good'])
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('bad'))
+    consoleError.mockRestore()
+  })
+
+  it('does not clear the index when building the document set fails entirely (e.g. a Postgres read failure) — the previous good index is left in place', async () => {
+    listingRepository.seed(listing())
+    listingRepository.listIndexable = vi.fn(async () => {
+      throw new Error('Postgres connection lost')
+    })
+
+    await expect(rebuildSearchIndex.execute()).rejects.toThrow(
+      'Postgres connection lost',
+    )
+
+    expect(searchIndex.clearCallCount).toBe(0)
+    expect(searchIndex.upsertCalls).toHaveLength(0)
   })
 })

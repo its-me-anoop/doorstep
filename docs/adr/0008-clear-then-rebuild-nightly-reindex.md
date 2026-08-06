@@ -29,16 +29,42 @@ everything?
 ## Decision
 
 `RebuildSearchIndex` (`src/services/search-sync/rebuild-search-index.ts`)
-does the simplest thing that satisfies the requirement: it calls
-`SearchIndex.clear()` (delete every document, settings untouched), then
-pages through every currently-indexable listing in Postgres
-(`ListingReader.listIndexable`, `published`/`under_offer` only) and
-upserts each page. `GET /api/cron/reindex`
-(`src/app/api/cron/reindex/route.ts`) runs this once nightly via
-`apps/web/vercel.json`'s `"0 3 * * *"` Vercel Cron entry (03:00 UTC) —
-the UK's lowest-traffic search hour, chosen specifically because this
-approach means the index is briefly emptier than it should be while the
-rebuild is in flight.
+does the simplest thing that satisfies the requirement: it pages through
+every currently-indexable listing in Postgres
+(`ListingReader.listIndexable`, `published`/`under_offer` only), maps
+each to a document, and only once that *entire* document set has been
+built does it call `SearchIndex.clear()` (delete every document, settings
+untouched) and then upsert the built set back in page-sized batches.
+`GET /api/cron/reindex` (`src/app/api/cron/reindex/route.ts`) runs this
+once nightly via `apps/web/vercel.json`'s `"0 3 * * *"` Vercel Cron entry
+(03:00 UTC) — the UK's lowest-traffic search hour, chosen specifically
+because this approach means the index is briefly emptier than it should
+be while the rebuild is in flight.
+
+Two refinements on top of that baseline, added after a real failure mode
+surfaced against this repo's own local dev data (documented in
+`scripts/seed-search-5k.ts`'s history and fixed as part of M2's
+post-review hardening pass):
+
+1. **Build before clearing, not clear-then-build.** The document set is
+   fully assembled first; `clear()` only runs once that succeeds. A
+   failure that stops the build entirely (e.g. Postgres becoming
+   unreachable mid-pagination) therefore leaves the *previous* good index
+   in place instead of an empty one — the destructive step is the last
+   thing this method does, not the first.
+2. **Per-listing resilience while building.** Mapping a single listing to
+   a document can fail for reasons that have nothing to do with that
+   listing's neighbours — most concretely, `ImageStorage.publicUrl()`
+   throwing for a stored image path that no longer resolves (a deleted
+   object, a revoked download token). Before this fix, that one failure
+   rejected the whole page's `Promise.all`, and because `clear()` had
+   already run, the net effect was an empty live index until someone
+   noticed and reran the job by hand. Each listing's mapping is now
+   caught independently: a failure is logged and that listing is
+   skipped, everything else in the run proceeds. A skipped listing isn't
+   silently lost — it shows up as exactly the `postgresCount` vs.
+   `meiliCountAfter` mismatch the drift check below already exists to
+   catch.
 
 The alternative — enumerate every document id currently in the index,
 diff it against Postgres's indexable-id set, and issue targeted

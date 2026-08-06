@@ -375,7 +375,7 @@ new routes belong and which are candidates for the composition root's
 | Surface                                                    | Strategy                                                                                                                  | Status as of M2                                                                                                                                                                                                                                                                                                                                                          |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Home                                                       | ISR, revalidated daily or on demand                                                                                       | Placeholder shell only                                                                                                                                                                                                                                                                                                                                                   |
-| Area landing pages (`/for-sale/{area}`, `/to-rent/{area}`) | ISR, revalidated daily or on demand                                                                                       | Built M2 (§16) — `revalidate = 86400` plus on-demand `revalidatePath` from `lib/listing-revalidation.ts` whenever a listing in that area changes visibility. Reads `searchParams` for filtered visits (`/for-sale/reading?minBeds=2`), which Next.js treats as per-request dynamic — only the _unfiltered_ canonical path is actually served from the ISR cache; see §16 |
+| Area landing pages (`/for-sale/{area}`, `/to-rent/{area}`) | ISR, revalidated daily or on demand (PRD §8.3 target — **not met as of M2**, see §16)                                     | Built M2 (§16) as a fully dynamic route, not ISR: it reads `searchParams` to support filtered visits (`/for-sale/reading?minBeds=2`), which Next's classic App Router treats as disqualifying the *whole* route from static generation — confirmed via `pnpm build`'s route table (`ƒ`, not `●`), including the unfiltered canonical URL. A prior version of this file incorrectly claimed the canonical path was ISR-cached; corrected during M2's post-review hardening pass. Closing the gap for real needs Next 16's Cache Components (Partial Prerendering), an app-wide migration out of scope for M2 — tracked as follow-up, not silently dropped |
 | Search results (list and map)                              | Client-driven UI calling `GET /api/v1/search`; shell server-renders with initial results for SEO on crawlable filter URLs | List built M2 (§16): `SearchResultsPage`, URL-state-as-source-of-truth (`lib/search-url.ts`), the results grid re-queries client-side on any filter/sort/page change. Map view is M3                                                                                                                                                                                     |
 | Listing detail                                             | ISR, on-demand revalidation on publish/edit/status change                                                                 | Built M2 (§16) — `GET /api/v1/properties/{slug}` (public, published/under_offer only) and `/property/{slug}` (`revalidate = 3600` plus the same on-demand `revalidatePath` as area pages, fired from the status/PATCH mutation routes). Gallery lightbox, floorplan/EPC tabs and similar-properties finalise in M4 per PRD §13                                           |
 | Agency pages                                               | ISR, revalidated on agency edits                                                                                          | Not built yet — no public `/agency/{slug}` route exists; M1 only built the _creation_ form (§9), not the public page                                                                                                                                                                                                                                                     |
@@ -772,11 +772,21 @@ ADR-0008 for the full alternatives-considered writeup.
 **Mechanics.** `execute()` reads `ListingReader.countIndexable()` (the
 Postgres source-of-truth count) and `SearchIndex.countDocuments()` (the
 Meilisearch count _before_ this run) up front, calls `ensureSettings()`
-(§13) then `clear()`, then pages through every indexable listing
-(`DEFAULT_PAGE_SIZE = 200` per page, per `SearchIndex.upsert` call) via
-`ListingReader.listIndexable`, mapping and upserting each page. It then
-re-reads `countDocuments()` (the Meilisearch count _after_) and compares
-it against the Postgres count captured at the start.
+(§13), then pages through every indexable listing via
+`ListingReader.listIndexable` (`DEFAULT_PAGE_SIZE = 200` per page) and
+maps each to a document. Only once that _entire_ document set has been
+built does it call `clear()` and upsert the set back in
+`DEFAULT_PAGE_SIZE`-sized `SearchIndex.upsert` batches — building before
+clearing means a failure that stops the build outright (e.g. Postgres
+going unreachable mid-pagination) leaves the previous good index in
+place instead of an empty one. A single listing's mapping failing (most
+concretely `ImageStorage.publicUrl()` throwing for an image path that no
+longer resolves) is caught and logged per-listing rather than aborting
+the run — that listing is skipped, everything else still gets indexed,
+and the gap surfaces as the drift mismatch below rather than as an empty
+index. It then re-reads `countDocuments()` (the Meilisearch count
+_after_) and compares it against the Postgres count captured at the
+start.
 
 **Drift detection.** A mismatch between `postgresCount` and
 `meiliCountAfter` is logged via `console.warn` — this is the detectable-
@@ -868,11 +878,24 @@ status-transition and PATCH-edit routes — never from `services/`, which
 stays framework-free (§3's DIP rule) — targeting `/property/{slug}`
 always, plus any curated area (`src/lib/areas.ts`) whose `town`/`outcode`
 match the listing. The detail page itself reads no `searchParams`, so it
-gets uncompromised ISR (`revalidate = 3600`); area pages _do_ read
-`searchParams` (to support `/for-sale/reading?minBeds=2`), which Next.js
-treats as per-request dynamic — so only the bare canonical area path is
-actually ISR-cached, filtered visits to it are freshly rendered every
-time, same as the plain search-results route.
+gets uncompromised ISR (`revalidate = 3600`) and that `revalidatePath`
+call does exactly what it says. Area pages are a different story: they
+_do_ read `searchParams` (to support `/for-sale/reading?minBeds=2`), and
+Next's classic (pre-Cache-Components) App Router treats *any* access to
+`searchParams` as disqualifying the whole route from static
+generation — not just the specific request that happened to carry query
+params. `pnpm build`'s route table confirms this: `/for-sale/[area]` and
+`/to-rent/[area]` are `ƒ` (fully dynamic), never `●`, for every visit
+including the bare canonical URL. An earlier version of this document
+claimed the canonical path was still ISR-cached; that claim did not hold
+up and is corrected here (§7's table too) — the `revalidatePath` call
+against the area path is currently inert (there is no ISR cache entry
+for it to invalidate), kept only because it costs nothing today and
+becomes meaningful again the moment area pages gain real caching. See
+`app/(public)/for-sale/[area]/page.tsx`'s own header comment for why a
+genuine fix (Partial Prerendering via Next 16's `cacheComponents` flag)
+is real, understood, and deliberately out of scope for M2 — it is an
+app-wide caching-model migration, not a one-route change.
 
 ---
 

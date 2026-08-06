@@ -104,12 +104,16 @@ Full milestone plan: [`docs/PRD.md` §13](docs/PRD.md#13-milestones-and-delivery
     `OutagePanel` in the results slot only, with the header, filter bar
     and chips still fully interactive.
   - **Area pages and public detail** — `/for-sale/{area}` and
-    `/to-rent/{area}` (`src/lib/areas.ts`'s curated list), ISR revalidated
-    daily plus on-demand revalidation whenever a listing in that area
-    changes visibility (`src/lib/listing-revalidation.ts`); the public
-    listing detail page (`GET /api/v1/properties/{slug}`,
-    `/property/{slug}`, published/under_offer only) is ISR with the same
-    on-demand revalidation on publish/edit/status change.
+    `/to-rent/{area}` (`src/lib/areas.ts`'s curated list) are fully
+    dynamic (SSR per request), not ISR, because they read `searchParams`
+    to support filtered visits (`/for-sale/reading?minBeds=2`), which
+    disqualifies the whole route from static generation under Next's
+    classic App Router model — see `docs/ARCHITECTURE.md` §16 for the
+    full explanation and the tracked follow-up. The public listing detail
+    page (`GET /api/v1/properties/{slug}`, `/property/{slug}`,
+    published/under_offer only) reads no `searchParams`, so it *is*
+    genuinely ISR, with on-demand revalidation on publish/edit/status
+    change (`src/lib/listing-revalidation.ts`).
   - **5k-listing bench tooling** — `pnpm seed:search-5k` (and
     `:clean`) plus `pnpm bench:search`, built for PRD §13's M2 exit
     criterion ("seeded 5k listings; p75 search under 500 ms") — see
