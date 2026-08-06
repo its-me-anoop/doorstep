@@ -23,6 +23,15 @@ import {
 
 const DEFAULT_LIMIT = 20
 
+/** Same pair services/search/map-listing-to-search-document.ts's
+ * INDEXABLE_STATUSES names — duplicated here rather than imported since
+ * this is a test double, not production code (see this file's header
+ * comment on FakeListingRepository standing in for a real repository). */
+const INDEXABLE_STATUSES: ReadonlySet<PropertyStatus> = new Set([
+  'published',
+  'under_offer',
+])
+
 export class FakeListingRepository implements ListingReader, ListingWriter {
   private readonly byId = new Map<string, Listing>()
   private readonly insertionOrder: string[] = []
@@ -58,6 +67,21 @@ export class FakeListingRepository implements ListingReader, ListingWriter {
     options: ListListingsOptions = {},
   ): Promise<ListingCursorPage<Listing>> {
     return this.paginate((listing) => listing.agencyId === agencyId, options)
+  }
+
+  async listIndexable(
+    options: ListListingsOptions = {},
+  ): Promise<ListingCursorPage<Listing>> {
+    return this.paginate(
+      (listing) => INDEXABLE_STATUSES.has(listing.status),
+      options,
+    )
+  }
+
+  async countIndexable(): Promise<number> {
+    return [...this.byId.values()].filter((listing) =>
+      INDEXABLE_STATUSES.has(listing.status),
+    ).length
   }
 
   async createDraft(draft: NewListingDraft): Promise<Listing> {

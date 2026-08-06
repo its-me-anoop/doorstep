@@ -366,5 +366,77 @@ describe.skipIf(!TEST_DATABASE_URL)(
 
       expect(page.data.map((l) => l.id)).toEqual([mine.id])
     })
+
+    describe('listIndexable / countIndexable', () => {
+      /** Moves a freshly created draft straight to `status`, bypassing the
+       * domain state machine entirely — transitionWithOutbox itself does
+       * not validate transitions (see this repository's doc comment), so
+       * this is the same "insert a published listing directly through the
+       * repo" shortcut scripts/seed.ts's own insert takes, just via the
+       * repository instead of a second raw insert path. */
+      async function createAt(
+        status: 'published' | 'under_offer' | 'hidden' | 'pending_review',
+        overrides: Partial<NewListingDraft> = {},
+      ) {
+        const created = await listingRepository.createDraft(draft(overrides))
+        const statusChangedAt = new Date()
+        return listingRepository.transitionWithOutbox(created.id, status, {
+          statusChangedAt,
+          publishedAt: statusChangedAt,
+          outboxOp: null,
+        })
+      }
+
+      it('returns only published/under_offer listings, excluding every other status', async () => {
+        // Not scoped to "this test's own rows" — listIndexable() is a
+        // whole-table scan by design (services/search-sync/
+        // rebuild-search-index.ts's nightly job has no lister/agency to
+        // filter by) — so this asserts inclusion/exclusion rather than an
+        // exact-equals against a table this suite doesn't otherwise clean
+        // between tests (see this directory's other suites' own
+        // accumulated fixtures on a shared dev database).
+        const published = await createAt('published')
+        const underOffer = await createAt('under_offer')
+        const pendingReview = await createAt('pending_review')
+        const hidden = await createAt('hidden')
+
+        const ids = (await listingRepository.listIndexable()).data.map(
+          (l) => l.id,
+        )
+
+        expect(ids).toEqual(
+          expect.arrayContaining([published.id, underOffer.id]),
+        )
+        expect(ids).not.toContain(pendingReview.id)
+        expect(ids).not.toContain(hidden.id)
+      })
+
+      // Cursor pagination mechanics (newest-first ordering, page-size
+      // limits, cursor correctness) are the shared private `listBy` helper
+      // listByLister's own suite already proves exhaustively — scoped to
+      // one lister there, so immune to the cross-test timing interference
+      // a whole-table, unscoped query like this one has no way to avoid.
+      // listIndexable's own thing to prove is the status filter, covered
+      // above.
+
+      it('counts only published/under_offer listings', async () => {
+        await createAt('published')
+        await createAt('under_offer')
+        await createAt('pending_review')
+
+        expect(await listingRepository.countIndexable()).toBeGreaterThanOrEqual(
+          2,
+        )
+        // Scope-independent of any other listings left in this shared
+        // dev/CI database by other tests: prove the delta from one more
+        // non-indexable listing is exactly zero, and from one more
+        // indexable listing is exactly one.
+        const before = await listingRepository.countIndexable()
+        await createAt('hidden')
+        expect(await listingRepository.countIndexable()).toBe(before)
+        await createAt('published')
+        expect(await listingRepository.countIndexable()).toBe(before + 1)
+      })
+    })
   },
 )

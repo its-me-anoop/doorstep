@@ -426,6 +426,13 @@ export const outbox = pgTable(
       .notNull()
       .defaultNow(),
     processedAt: timestamp('processed_at', { withTimezone: true }),
+    // Lease timestamp for DrizzleOutboxRepository.claimBatch (PRD §8.6's
+    // "Vercel Cron worker drains the outbox") — set to the claiming run's
+    // start time when a row is claimed, cleared conceptually (not
+    // physically — see that method's doc comment) once its lease expires.
+    // Lets a second, overlapping cron invocation skip rows an in-flight
+    // run already claimed instead of double-processing them.
+    claimedAt: timestamp('claimed_at', { withTimezone: true }),
   },
   (t) => [index('outbox_unprocessed_idx').on(t.processedAt)],
 )

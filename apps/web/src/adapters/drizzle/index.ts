@@ -27,6 +27,10 @@ export {
   mapRowToPropertyImage,
 } from './repositories/property-image-repository'
 export {
+  DrizzleOutboxRepository,
+  mapRowToOutboxEntry,
+} from './repositories/outbox-repository'
+export {
   geographyPoint,
   citext,
   encodeGeographyPoint,

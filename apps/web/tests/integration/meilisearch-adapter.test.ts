@@ -665,5 +665,24 @@ describe.skipIf(!TEST_MEILISEARCH_HOST)(
         expect(afterDelete.hits).toHaveLength(0)
       })
     })
+
+    // Deliberately last: clear() wipes every document in the shared,
+    // beforeAll-seeded index this whole describe block reuses (unlike
+    // every test above, which adds/removes its own throwaway fixture) —
+    // any test relying on FIXTURES still being present must run before
+    // this one.
+    describe('clear', () => {
+      it('removes every document, leaving settings untouched', async () => {
+        expect(await searchIndex.countDocuments()).toBeGreaterThan(0)
+
+        await searchIndex.clear()
+
+        expect(await searchIndex.countDocuments()).toBe(0)
+        const settings = await rawClient.index(indexName).getSettings()
+        expect([...(settings.filterableAttributes ?? [])].sort()).toEqual(
+          [...FILTERABLE_ATTRIBUTES].sort(),
+        )
+      })
+    })
   },
 )

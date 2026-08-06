@@ -25,9 +25,14 @@
  * DrizzlePropertyImageRepository; FirebaseStorageAdapter's constructor
  * reads no env var itself (see that class's doc comment) so this
  * function's own eager-construction-of-everything shape still never
- * throws for a service group a given request doesn't touch. Later
- * milestones add a concrete adapter per port here as each remaining
- * integration (Meilisearch, Resend, Mapbox, Upstash) lands. See PRD §8.5.
+ * throws for a service group a given request doesn't touch. `search`
+ * (DrainOutbox, RebuildSearchIndex — PRD §8.6's outbox drain worker and
+ * nightly reindex) is the sixth, wired to the new DrizzleOutboxRepository
+ * and MeilisearchSearchIndex; the latter's constructor is lazy in the
+ * same way (reads MEILISEARCH_HOST only once a method actually runs), so
+ * it holds the same "never throws for an untouched service group"
+ * property. Later milestones add a concrete adapter per port here as each
+ * remaining integration (Resend, Mapbox, Upstash) lands. See PRD §8.5.
  *
  * Note: this constructs a DrizzleUserRepository, which calls
  * adapters/drizzle/client.ts's getDb() — that throws if DATABASE_URL
@@ -42,12 +47,14 @@
 import { getDb } from '@/adapters/drizzle/client'
 import { DrizzleAgencyRepository } from '@/adapters/drizzle/repositories/agency-repository'
 import { DrizzleListingRepository } from '@/adapters/drizzle/repositories/listing-repository'
+import { DrizzleOutboxRepository } from '@/adapters/drizzle/repositories/outbox-repository'
 import { DrizzlePropertyImageRepository } from '@/adapters/drizzle/repositories/property-image-repository'
 import { DrizzleUserRepository } from '@/adapters/drizzle/repositories/user-repository'
 import {
   FirebaseAuthGateway,
   FirebaseStorageAdapter,
 } from '@/adapters/firebase'
+import { MeilisearchSearchIndex } from '@/adapters/meilisearch'
 import { PostcodesIoGeocoder } from '@/adapters/postcodesio'
 import { SystemClock } from '@/adapters/system-clock'
 import {
@@ -75,6 +82,7 @@ import {
   SubmitListing,
   UpdateListing,
 } from '@/services/listings'
+import { DrainOutbox, RebuildSearchIndex } from '@/services/search-sync'
 
 export interface AuthServices {
   establishSession: EstablishSession
@@ -111,12 +119,18 @@ export interface ImageServices {
   getCoverBlurhashes: GetCoverBlurhashes
 }
 
+export interface SearchSyncServices {
+  drainOutbox: DrainOutbox
+  rebuildSearchIndex: RebuildSearchIndex
+}
+
 export interface Services {
   auth: AuthServices
   listers: ListerServices
   listings: ListingServices
   geocoding: GeocodingServices
   images: ImageServices
+  search: SearchSyncServices
 }
 
 export function createServices(): Services {
@@ -124,10 +138,12 @@ export function createServices(): Services {
   const agencyRepository = new DrizzleAgencyRepository(getDb())
   const listingRepository = new DrizzleListingRepository(getDb())
   const propertyImageRepository = new DrizzlePropertyImageRepository(getDb())
+  const outboxRepository = new DrizzleOutboxRepository(getDb())
   const authGateway = new FirebaseAuthGateway()
   const clock = new SystemClock()
   const geocoder = new PostcodesIoGeocoder()
   const imageStorage = new FirebaseStorageAdapter()
+  const searchIndex = new MeilisearchSearchIndex()
 
   return {
     auth: {
@@ -202,6 +218,23 @@ export function createServices(): Services {
         imageStorage,
       ),
       getCoverBlurhashes: new GetCoverBlurhashes(propertyImageRepository),
+    },
+    search: {
+      drainOutbox: new DrainOutbox(
+        outboxRepository,
+        listingRepository,
+        propertyImageRepository,
+        agencyRepository,
+        imageStorage,
+        searchIndex,
+      ),
+      rebuildSearchIndex: new RebuildSearchIndex(
+        listingRepository,
+        propertyImageRepository,
+        agencyRepository,
+        imageStorage,
+        searchIndex,
+      ),
     },
   }
 }

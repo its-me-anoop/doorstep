@@ -68,5 +68,12 @@ describe('ports barrel', () => {
       expect(services.images.setImageKind).toBeDefined()
       expect(services.images.deleteImage).toBeDefined()
     })
+
+    it('wires the search service group', () => {
+      const services = createServices()
+
+      expect(services.search.drainOutbox).toBeDefined()
+      expect(services.search.rebuildSearchIndex).toBeDefined()
+    })
   })
 })

@@ -39,6 +39,7 @@ export type {
 export { UniqueViolationError } from './user-repository'
 export type { Agency, AgencyRepository } from './agency-repository'
 export { AgencySlugConflictError } from './agency-repository'
+export type { OutboxEntry, OutboxRepository } from './outbox-repository'
 export type {
   GeoPoint,
   ListingSearchAgency,

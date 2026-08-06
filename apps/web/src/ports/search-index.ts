@@ -178,6 +178,12 @@ export interface SearchIndex {
   /** Upserts (adds or replaces, keyed on `id`) every document given. */
   upsert(documents: ListingSearchDocument[]): Promise<void>
   delete(ids: string[]): Promise<void>
+  /** Removes every document in the index — the "start from a known-empty
+   * baseline" half of services/search-sync/rebuild-search-index.ts's
+   * nightly full reindex (PRD §8.6: "Meilisearch is a disposable
+   * projection"). Settings applied by ensureSettings are unaffected;
+   * only documents are cleared. */
+  clear(): Promise<void>
   search(query: SearchQuery): Promise<SearchResult>
   countDocuments(): Promise<number>
   /** True if the index is reachable and responding — used by the (later)

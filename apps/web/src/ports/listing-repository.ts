@@ -55,6 +55,25 @@ export interface ListingReader {
     agencyId: string,
     options?: ListListingsOptions,
   ): Promise<ListingCursorPage<Listing>>
+  /**
+   * Every publicly visible listing (`published`, `under_offer` — the same
+   * pair services/search/map-listing-to-search-document.ts's
+   * INDEXABLE_STATUSES and services/listings/change-listing-status.ts's
+   * isVisible check, PRD §8.6), newest first with the same id-cursor
+   * convention as listByLister/listByAgency. Exists for
+   * services/search-sync/rebuild-search-index.ts's nightly full reindex,
+   * which has to walk every indexable listing in the whole system rather
+   * than one lister's or agency's — the outbox drain worker never needs
+   * this (it works from outbox rows, not a full scan).
+   */
+  listIndexable(
+    options?: ListListingsOptions,
+  ): Promise<ListingCursorPage<Listing>>
+  /** Count of listings `listIndexable` would return in total — the
+   * "source of truth" side of RebuildSearchIndex's drift comparison
+   * against Meilisearch's own document count (PRD §8.6: "a count-mismatch
+   * alert catches sync bugs"). */
+  countIndexable(): Promise<number>
 }
 
 /**

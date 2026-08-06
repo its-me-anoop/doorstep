@@ -285,6 +285,11 @@ export class MeilisearchSearchIndex implements SearchIndex {
     assertTaskSucceeded(task)
   }
 
+  async clear(): Promise<void> {
+    const task = await this.index().deleteAllDocuments().waitTask()
+    assertTaskSucceeded(task)
+  }
+
   async search(query: SearchQuery): Promise<SearchResult> {
     const response = await this.index().search(null, {
       filter: buildFilterExpression(query),

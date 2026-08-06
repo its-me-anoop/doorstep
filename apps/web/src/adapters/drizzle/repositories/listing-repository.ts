@@ -21,7 +21,7 @@
  * land or neither does.
  */
 
-import { and, desc, eq, lt, type SQL } from 'drizzle-orm'
+import { and, count, desc, eq, inArray, lt, type SQL } from 'drizzle-orm'
 
 import type { PropertyStatus } from '@/domain/enums'
 import {
@@ -43,6 +43,19 @@ import { events, outbox, properties } from '../schema'
 type PropertyRow = typeof properties.$inferSelect
 
 const DEFAULT_PAGE_LIMIT = 20
+
+/** The two publicly-visible statuses (PRD §8.6) — same pair as
+ * services/search/map-listing-to-search-document.ts's INDEXABLE_STATUSES
+ * and services/listings/change-listing-status.ts's isVisible, duplicated
+ * locally rather than imported from either: this is an adapters/ file and
+ * cannot depend on services/ (DIP runs the other way), and inventing a
+ * shared domain/ constant for a business rule already duplicated twice
+ * would be a drive-by refactor of code this change doesn't otherwise
+ * touch. */
+const INDEXABLE_STATUSES: readonly PropertyStatus[] = [
+  'published',
+  'under_offer',
+]
 
 /** Maps a `properties` table row to the ListingRepository port's `Listing`
  * shape. Pure and DB-free, so it is unit-tested directly. Field names are
@@ -123,6 +136,20 @@ export class DrizzleListingRepository implements ListingReader, ListingWriter {
     options?: ListListingsOptions,
   ): Promise<ListingCursorPage<Listing>> {
     return this.listBy(eq(properties.agencyId, agencyId), options)
+  }
+
+  async listIndexable(
+    options?: ListListingsOptions,
+  ): Promise<ListingCursorPage<Listing>> {
+    return this.listBy(inArray(properties.status, INDEXABLE_STATUSES), options)
+  }
+
+  async countIndexable(): Promise<number> {
+    const [row] = await this.db
+      .select({ value: count() })
+      .from(properties)
+      .where(inArray(properties.status, INDEXABLE_STATUSES))
+    return row?.value ?? 0
   }
 
   async createDraft(draft: NewListingDraft): Promise<Listing> {
