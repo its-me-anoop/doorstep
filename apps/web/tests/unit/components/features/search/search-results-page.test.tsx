@@ -131,4 +131,38 @@ describe('SearchResultsPage (area tier)', () => {
 
     expect(serialise(result)).toContain("basePath: '/for-sale/reading'")
   })
+
+  // PRD §7.6 / M2-DESIGN-SPEC.md §1.10 point 4's own text ("area landing
+  // pages don't fully degrade... independent of Meilisearch") is written
+  // assuming Postgres itself stays up — it never says what happens if the
+  // *newest-strip's own* Postgres read fails. Confirmed via a real e2e
+  // run against a DB-unreachable placeholder environment
+  // (tests/e2e/m2.smoke.spec.ts): before this test, that read's rejection
+  // propagated uncaught out of this server component and 500'd the whole
+  // area page — worse than the Meilisearch-outage case this same page
+  // already degrades gracefully from. The newest strip is decoration
+  // (AreaIntro already renders nothing for it when `newest` is empty,
+  // exactly the M1/pre-launch shape every curated area with no matching
+  // listings yet already produces), so a failed read degrades to that
+  // same "no strip" shape rather than taking the page down.
+  it('falls back to an empty newest strip rather than throwing when listNewestInArea fails', async () => {
+    listNewestInAreaExecute.mockRejectedValue(
+      new Error('connect ECONNREFUSED 127.0.0.1:5432'),
+    )
+    const { SearchResultsPage } =
+      await import('@/components/features/search/search-results-page')
+
+    const result = await SearchResultsPage({
+      channel: 'sale',
+      tier: 'area',
+      rawSearchParams: {},
+      area: readingArea,
+    })
+
+    // The results grid itself (Meilisearch-backed, mocked healthy here)
+    // still renders normally — only the Postgres-backed strip degrades.
+    expect(listNewestInAreaExecute).toHaveBeenCalled()
+    expect(serialise(result)).toContain('[Function: AreaIntro]')
+    expect(serialise(result)).toContain('newest: []')
+  })
 })

@@ -14,7 +14,10 @@ import {
   nextSearchParamsToURLSearchParams,
   parseSearchUrlState,
   stripFiltersKeepLocation,
+  type SearchAreaFilter,
 } from '@/lib/search-url'
+import type { ListNewestInArea } from '@/services/listings'
+import type { PublicSearchHit } from '@/services/search/search-listings'
 
 interface SearchResultsPageProps {
   channel: Channel
@@ -44,6 +47,33 @@ const CHANNEL_CRUMB_LABEL: Record<Channel, string> = {
  * single-purpose function rather than inlined. */
 function currentUnixSeconds(): number {
   return Math.floor(Date.now() / 1000)
+}
+
+/**
+ * The newest-in-area strip is Postgres-backed decoration on top of the
+ * results grid, not the grid itself (see AreaIntro's own doc comment) —
+ * M2-DESIGN-SPEC.md §1.10 point 4's "area landing pages don't fully
+ * degrade... independent of Meilisearch" line is written assuming
+ * Postgres itself stays up; it says nothing about a Postgres outage.
+ * Confirmed via a real e2e run against a DB-unreachable environment
+ * (tests/e2e/m2.smoke.spec.ts): before this fallback existed, a failed
+ * read here propagated uncaught out of this server component and 500'd
+ * the whole area page — worse than the Meilisearch-outage case this same
+ * page already degrades gracefully from. Falls back to the exact same
+ * empty-array shape a genuinely newest-strip-free area already produces
+ * (AreaIntro renders nothing for `newest.length === 0`), logged so the
+ * failure is still visible server-side. */
+async function fetchNewestInArea(
+  listNewestInArea: ListNewestInArea,
+  channel: Channel,
+  areaFilter: SearchAreaFilter,
+): Promise<PublicSearchHit[]> {
+  try {
+    return await listNewestInArea.execute(channel, areaFilter)
+  } catch (error) {
+    console.error('SearchResultsPage: listNewestInArea failed:', error)
+    return []
+  }
 }
 
 /**
@@ -93,7 +123,7 @@ export async function SearchResultsPage({
   const showAreaSection = Boolean(area) && !hasActiveSearchFilters(state)
   const newestInArea =
     showAreaSection && area && areaFilter
-      ? await listings.listNewestInArea.execute(channel, areaFilter)
+      ? await fetchNewestInArea(listings.listNewestInArea, channel, areaFilter)
       : []
 
   const unfilteredHref =

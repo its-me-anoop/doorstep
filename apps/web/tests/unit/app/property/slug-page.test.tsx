@@ -133,6 +133,32 @@ describe('/property/[slug] page', () => {
     expect(notFoundMock).toHaveBeenCalled()
   })
 
+  // Confirmed via a real e2e run against a DB-unreachable placeholder
+  // environment (tests/e2e/m2.smoke.spec.ts): before this test, any
+  // non-PublicListingNotFoundError rejection (a genuine Postgres outage,
+  // not "this slug doesn't exist") propagated uncaught out of this server
+  // component and 500'd the page — a raw crash PRD §7.6 explicitly rules
+  // out, and a worse outcome for a visitor than the same clean 404 an
+  // unknown slug already produces. GetPublicListing's own doc comment
+  // already commits to never distinguishing "unknown" from "exists but
+  // not visible" for privacy; this extends the same "don't leak *why*, a
+  // 404-shaped response either way" principle to "exists but temporarily
+  // unreachable" too, rather than adding a third, distinct outage UI this
+  // page has nowhere to put.
+  it('calls notFound(), not a raw crash, when GetPublicListing rejects for an infrastructure reason', async () => {
+    getPublicListing.execute.mockRejectedValue(
+      new Error('connect ECONNREFUSED 127.0.0.1:5432'),
+    )
+    const { default: PropertyDetailPage } =
+      await import('@/app/(public)/property/[slug]/page')
+
+    await PropertyDetailPage({
+      params: Promise.resolve({ slug: 'a-slug' }),
+    })
+
+    expect(notFoundMock).toHaveBeenCalled()
+  })
+
   it('omits the area breadcrumb crumb for a town outside the curated set', async () => {
     getPublicListing.execute.mockResolvedValue(
       listing({ town: 'Henley-on-Thames', outcode: 'RG9' }),

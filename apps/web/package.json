@@ -21,7 +21,9 @@
     "seed:assert": "tsx scripts/assert-seed-count.ts",
     "seed:search-5k": "tsx scripts/seed-search-5k.ts",
     "seed:search-5k:clean": "tsx scripts/seed-search-5k.ts --clean",
-    "bench:search": "tsx scripts/search-bench.ts"
+    "bench:search": "tsx scripts/search-bench.ts",
+    "reindex:local": "tsx scripts/reindex-local.ts",
+    "backfill:storage-emulator": "tsx scripts/backfill-storage-emulator.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

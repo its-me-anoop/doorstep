@@ -55,7 +55,18 @@ async function loadListing(slug: string): Promise<PublicListingDetail | null> {
     return await listings.getPublicListing.execute(slug)
   } catch (error) {
     if (error instanceof PublicListingNotFoundError) return null
-    throw error
+    // Anything else here is an infrastructure failure (Postgres/Storage
+    // unreachable), not "this slug doesn't exist" — but the visitor-
+    // facing outcome is the same either way (PRD §7.6: never a raw
+    // crash), and GetPublicListing's own doc comment already commits to
+    // never distinguishing "unknown" from "exists but not visible" for
+    // privacy; this extends that same "404-shaped either way" principle
+    // to "exists but temporarily unreachable," rather than inventing a
+    // third, distinct outage UI this page has nowhere to put. Logged so
+    // the distinction is still visible server-side, unlike the identical-
+    // looking not-found case above.
+    console.error(`GET /property/${slug} failed:`, error)
+    return null
   }
 }
 
