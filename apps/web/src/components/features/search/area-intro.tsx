@@ -14,6 +14,8 @@ interface AreaIntroProps {
    * on why it's a snapshot, not re-fetched. */
   totalCount: number
   now: number
+  signedIn?: boolean
+  savedPropertyIds?: string[]
 }
 
 const CHANNEL_COPY: Record<Channel, string> = {
@@ -41,6 +43,8 @@ export function AreaIntro({
   newest,
   totalCount,
   now,
+  signedIn = false,
+  savedPropertyIds = [],
 }: AreaIntroProps) {
   return (
     <div className="flex flex-col gap-8">
@@ -56,7 +60,12 @@ export function AreaIntro({
           <div className="flex gap-4 overflow-x-auto lg:grid lg:grid-cols-4 lg:gap-6 lg:overflow-visible">
             {newest.map((hit) => (
               <div key={hit.id} className="w-64 shrink-0 lg:w-auto">
-                <ResultCard hit={hit} now={now} />
+                <ResultCard
+                  hit={hit}
+                  now={now}
+                  signedIn={signedIn}
+                  saved={savedPropertyIds.includes(hit.id)}
+                />
               </div>
             ))}
           </div>

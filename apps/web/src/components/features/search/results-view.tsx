@@ -89,6 +89,8 @@ interface ResultsViewProps {
    * grid agrees on one New-this-week instant (§1.11) and so a
    * client-side re-render doesn't quietly redraw badges mid-session. */
   now: number
+  signedIn?: boolean
+  savedPropertyIds?: string[]
   /** §4's area landing pages: the curated area's town/outcode, merged
    * into every re-query (not just the SSR initial one) so applying a
    * filter on an area page never silently drops its location scope. */
@@ -139,6 +141,8 @@ export function ResultsView({
   initialResult,
   unfilteredHref,
   now,
+  signedIn = false,
+  savedPropertyIds = [],
   areaFilter,
   areaLabel,
   areaCentre,
@@ -455,6 +459,8 @@ export function ResultsView({
               buildSearchHref(basePath, { ...state, page })
             }
             now={now}
+            signedIn={signedIn}
+            savedPropertyIds={savedPropertyIds}
             outage={outage}
             dimmed={dimmed}
             onRetry={retry}
@@ -485,7 +491,13 @@ export function ResultsView({
                 )}
               >
                 {result.results.map((hit) => (
-                  <ResultCard key={hit.id} hit={hit} now={now} />
+                  <ResultCard
+                    key={hit.id}
+                    hit={hit}
+                    now={now}
+                    signedIn={signedIn}
+                    saved={savedPropertyIds.includes(hit.id)}
+                  />
                 ))}
               </div>
             )}

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { Maximize2, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 import { blurhashAverageColor } from '@/lib/blurhash-preview'
 import { cn } from '@/lib/utils'
@@ -58,10 +59,76 @@ function narrowestUrl(
  */
 export function CoverGallery({ title, images }: CoverGalleryProps) {
   const [selectedId, setSelectedId] = useState(images[0]?.id)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
   const selected = images.find((image) => image.id === selectedId) ?? images[0]
+
+  const photos = images.filter((image) => image.kind === 'photo')
+  const floorplans = images.filter((image) => image.kind === 'floorplan')
+  const epcImages = images.filter((image) => image.kind === 'epc')
+  const hasTabs = floorplans.length > 0 || epcImages.length > 0
+  const [activeTab, setActiveTab] = useState<'photos' | 'floorplan' | 'epc'>(
+    'photos',
+  )
+
+  const tabImages =
+    activeTab === 'floorplan'
+      ? floorplans
+      : activeTab === 'epc'
+        ? epcImages
+        : photos.length > 0
+          ? photos
+          : images
+
+  useEffect(() => {
+    if (!tabImages.some((image) => image.id === selectedId)) {
+      setSelectedId(tabImages[0]?.id)
+    }
+  }, [activeTab, selectedId, tabImages])
+
+  useEffect(() => {
+    if (!lightboxOpen) return
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setLightboxOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [lightboxOpen])
 
   return (
     <div className="flex flex-col gap-3">
+      {hasTabs && (
+        <div className="flex gap-2">
+          {(['photos', 'floorplan', 'epc'] as const).map((tab) => {
+            const count =
+              tab === 'photos'
+                ? photos.length || images.length
+                : tab === 'floorplan'
+                  ? floorplans.length
+                  : epcImages.length
+            if (count === 0) return null
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={cn(
+                  'rounded-[var(--radius-sm)] px-3 py-1 text-sm font-medium',
+                  activeTab === tab
+                    ? 'bg-secondary text-secondary-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {tab === 'photos'
+                  ? 'Photos'
+                  : tab === 'floorplan'
+                    ? 'Floorplan'
+                    : 'EPC'}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       <div
         className="bg-paper-200 relative aspect-[4/3] overflow-hidden rounded-[var(--radius-lg)] md:aspect-[16/10]"
         style={
@@ -79,11 +146,21 @@ export function CoverGallery({ title, images }: CoverGalleryProps) {
             className="opacity-transition size-full object-cover"
           />
         )}
+        {selected && (
+          <button
+            type="button"
+            aria-label="View full screen"
+            onClick={() => setLightboxOpen(true)}
+            className="bg-card/90 text-foreground absolute right-3 bottom-3 flex size-10 items-center justify-center rounded-[var(--radius-md)] shadow-sm"
+          >
+            <Maximize2 className="size-4" />
+          </button>
+        )}
       </div>
 
-      {images.length > 1 && (
+      {tabImages.length > 1 && (
         <div className="flex flex-wrap gap-2 overflow-x-auto">
-          {images.map((image) => {
+          {tabImages.map((image) => {
             const kindLabel = KIND_LABEL[image.kind]
             const isSelected = image.id === selected?.id
             return (
@@ -113,6 +190,30 @@ export function CoverGallery({ title, images }: CoverGalleryProps) {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {lightboxOpen && selected && (
+        <div
+          className="bg-ink-900/90 fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Image gallery"
+        >
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={() => setLightboxOpen(false)}
+            className="text-primary-foreground absolute top-4 right-4 flex size-10 items-center justify-center"
+          >
+            <X className="size-6" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={widestUrl(selected.urls)}
+            alt={selected.altText ?? title}
+            className="max-h-[90vh] max-w-full object-contain"
+          />
         </div>
       )}
     </div>

@@ -174,10 +174,10 @@ describe('ResultCard', () => {
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
   })
 
-  it('reserves an empty, non-interactive 44x44 save-heart slot (M4)', () => {
+  it('renders a save-heart control in the card action slot', () => {
     render(<ResultCard hit={baseHit()} now={NOW_SECONDS} />)
-    const slot = screen.getByTestId('card-action-slot')
-    expect(slot).toHaveAttribute('aria-hidden', 'true')
-    expect(slot).toBeEmptyDOMElement()
+    expect(
+      screen.getByRole('button', { name: 'Save to favourites' }),
+    ).toBeInTheDocument()
   })
 })

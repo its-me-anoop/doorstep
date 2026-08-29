@@ -7,12 +7,23 @@ import { ListerCard } from '@/components/features/listings/detail/lister-card'
 // badge, filling the same visual slot. Phone-reveal/enquiry CTA are M4
 // reserved — this card renders neither in M2.
 describe('ListerCard', () => {
+  const baseProps = {
+    propertyId: 'prop-1',
+    signedIn: false,
+  }
+
   it('shows the agency name and listing town for an agency-listed property', () => {
     render(
       <ListerCard
+        {...baseProps}
         channel="sale"
         town="Reading"
-        agency={{ id: 'agency-1', name: 'Barnes & Co', logoUrl: null }}
+        agency={{
+          id: 'agency-1',
+          name: 'Barnes & Co',
+          logoUrl: null,
+          contactPhone: null,
+        }}
       />,
     )
     expect(screen.getByText('Barnes & Co')).toBeInTheDocument()
@@ -22,12 +33,14 @@ describe('ListerCard', () => {
   it('renders the agency logo when one is set', () => {
     render(
       <ListerCard
+        {...baseProps}
         channel="sale"
         town="Reading"
         agency={{
           id: 'agency-1',
           name: 'Barnes & Co',
           logoUrl: 'https://example.com/logo.png',
+          contactPhone: null,
         }}
       />,
     )
@@ -40,30 +53,42 @@ describe('ListerCard', () => {
   it('does not render an image element when the agency has no logo', () => {
     render(
       <ListerCard
+        {...baseProps}
         channel="sale"
         town="Reading"
-        agency={{ id: 'agency-1', name: 'Barnes & Co', logoUrl: null }}
+        agency={{
+          id: 'agency-1',
+          name: 'Barnes & Co',
+          logoUrl: null,
+          contactPhone: null,
+        }}
       />,
     )
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
   })
 
   it('shows a Private seller badge for a sale listing with no agency', () => {
-    render(<ListerCard channel="sale" town="Reading" agency={null} />)
+    render(<ListerCard {...baseProps} channel="sale" town="Reading" agency={null} />)
     expect(screen.getByText('Private seller')).toBeInTheDocument()
   })
 
   it('shows a Private landlord badge for a rent listing with no agency', () => {
-    render(<ListerCard channel="rent" town="Reading" agency={null} />)
+    render(<ListerCard {...baseProps} channel="rent" town="Reading" agency={null} />)
     expect(screen.getByText('Private landlord')).toBeInTheDocument()
   })
 
   it('never renders a "View agency profile" link (no public agency page ships in M2)', () => {
     render(
       <ListerCard
+        {...baseProps}
         channel="sale"
         town="Reading"
-        agency={{ id: 'agency-1', name: 'Barnes & Co', logoUrl: null }}
+        agency={{
+          id: 'agency-1',
+          name: 'Barnes & Co',
+          logoUrl: null,
+          contactPhone: null,
+        }}
       />,
     )
     expect(screen.queryByRole('link')).not.toBeInTheDocument()

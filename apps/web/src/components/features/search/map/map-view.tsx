@@ -51,6 +51,8 @@ interface MapViewProps {
   onListPageChange: (page: number) => void
   listHrefForPage: (page: number) => string
   now: number
+  signedIn?: boolean
+  savedPropertyIds?: string[]
   outage: boolean
   dimmed: boolean
   onRetry: () => void
@@ -90,6 +92,8 @@ export function MapView({
   onListPageChange,
   listHrefForPage,
   now,
+  signedIn = false,
+  savedPropertyIds = [],
   outage,
   dimmed,
   onRetry,
@@ -280,7 +284,12 @@ export function MapView({
                       'bg-clay-050 outline-ring outline-2 outline-offset-2',
                   )}
                 >
-                  <ResultCard hit={hit} now={now} />
+                  <ResultCard
+                    hit={hit}
+                    now={now}
+                    signedIn={signedIn}
+                    saved={savedPropertyIds.includes(hit.id)}
+                  />
                 </div>
               ))}
             </div>

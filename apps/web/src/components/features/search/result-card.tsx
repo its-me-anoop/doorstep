@@ -4,6 +4,8 @@ import { formatPrice } from '@/domain/money'
 import { PROPERTY_TYPE_LABELS } from '@/components/features/listings/wizard/wizard-labels'
 import type { PublicSearchHit } from '@/services/search/search-listings'
 
+import { SaveHeartButton } from '@/components/features/saved/save-heart-button'
+
 interface ResultCardProps {
   hit: PublicSearchHit
   /** Unix seconds "now" the New-this-week threshold is computed against
@@ -12,6 +14,8 @@ interface ResultCardProps {
    * the same instant rather than each card evaluating a fractionally
    * different `now`. */
   now: number
+  signedIn?: boolean
+  saved?: boolean
 }
 
 const NEW_THIS_WEEK_SECONDS = 7 * 24 * 60 * 60
@@ -55,7 +59,7 @@ function freshnessOrStatusBadge(
  * blurhash, so the placeholder under the image is a flat `--paper-200`
  * tile rather than a blurhash-decoded swatch).
  */
-export function ResultCard({ hit, now }: ResultCardProps) {
+export function ResultCard({ hit, now, signedIn = false, saved = false }: ResultCardProps) {
   const badge = freshnessOrStatusBadge(hit, now)
   const priceLine = formatPrice({
     channel: hit.channel,
@@ -84,13 +88,12 @@ export function ResultCard({ hit, now }: ResultCardProps) {
           </span>
         )}
 
-        {/* Reserved M4 save-heart slot (§1.8) — genuinely empty, not a
-         * ghost icon, so the card's geometry never has to shift when the
-         * real control lands. */}
-        <div
-          data-testid="card-action-slot"
-          aria-hidden="true"
-          className="absolute top-2 right-2 size-11"
+        <SaveHeartButton
+          propertyId={hit.id}
+          initialSaved={saved}
+          signedIn={signedIn}
+          stopPropagation
+          className="absolute top-2 right-2"
         />
       </div>
 

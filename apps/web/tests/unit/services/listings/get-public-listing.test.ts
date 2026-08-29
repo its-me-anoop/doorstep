@@ -223,6 +223,7 @@ describe('GetPublicListing', () => {
       id: 'agency-1',
       name: 'Barnes & Co',
       logoUrl: null,
+      contactPhone: '01189 000000',
     })
   })
 

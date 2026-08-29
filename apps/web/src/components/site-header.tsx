@@ -33,11 +33,25 @@ export async function SiteHeader() {
           {session ? (
             <>
               <Link
+                href="/account/favourites"
+                className="text-foreground hover:text-primary text-sm font-medium"
+              >
+                Favourites
+              </Link>
+              <Link
                 href="/account"
                 className="text-foreground hover:text-primary text-sm font-medium"
               >
                 Account
               </Link>
+              {session.user.role === 'admin' && (
+                <Link
+                  href="/admin"
+                  className="text-foreground hover:text-primary text-sm font-medium"
+                >
+                  Admin
+                </Link>
+              )}
               <SignOutButton />
             </>
           ) : (

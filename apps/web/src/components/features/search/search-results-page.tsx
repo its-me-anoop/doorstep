@@ -8,6 +8,7 @@ import { areaMatchToFilter, type AreaDefinition } from '@/lib/areas'
 import { createServices } from '@/lib/composition'
 import { isMapFeatureEnabled } from '@/lib/feature-flags'
 import type { SearchHeadingTier } from '@/lib/search-heading'
+import { getSessionUser } from '@/lib/session'
 import { fetchInitialSearchResult } from '@/lib/server-search'
 import {
   hasActiveSearchFilters,
@@ -125,6 +126,18 @@ export async function SearchResultsPage({
   )
   const now = currentUnixSeconds()
 
+  const session = await getSessionUser()
+  let savedPropertyIds: string[] = []
+  if (session) {
+    try {
+      const { saved } = createServices()
+      const favourites = await saved.listSavedProperties.execute(session.user)
+      savedPropertyIds = favourites.map((row) => row.listing.id)
+    } catch (error) {
+      console.error('SearchResultsPage: listSavedProperties failed:', error)
+    }
+  }
+
   // §4.1: the intro/newest-strip section renders only on the canonical,
   // zero-filter area URL — the moment a filter is active, this page is
   // "results for {area} with a filter," not "the {area} landing page."
@@ -196,6 +209,8 @@ export async function SearchResultsPage({
           initialResult={initialResult}
           unfilteredHref={unfilteredHref}
           now={now}
+          signedIn={Boolean(session)}
+          savedPropertyIds={savedPropertyIds}
           areaFilter={areaFilter}
           areaLabel={area?.label}
           areaCentre={area?.centre}
@@ -208,6 +223,8 @@ export async function SearchResultsPage({
                 newest={newestInArea}
                 totalCount={initialResult?.totalCount ?? 0}
                 now={now}
+                signedIn={Boolean(session)}
+                savedPropertyIds={savedPropertyIds}
               />
             ) : undefined
           }
