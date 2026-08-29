@@ -7,7 +7,10 @@ import { DeleteAccount } from '@/services/account/delete-account'
 import { FakeAuthGateway, FakeClock, FakeUserRepository } from '../auth/fakes'
 import { FakeEnquiryRepository } from '../enquiries/fakes'
 import { FakeListingRepository } from '../listings/fakes'
-import { FakeSavedPropertyRepository, FakeSavedSearchRepository } from '../saved/fakes'
+import {
+  FakeSavedPropertyRepository,
+  FakeSavedSearchRepository,
+} from '../saved/fakes'
 
 function actor(): User {
   return {

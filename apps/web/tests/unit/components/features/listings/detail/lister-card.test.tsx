@@ -68,12 +68,16 @@ describe('ListerCard', () => {
   })
 
   it('shows a Private seller badge for a sale listing with no agency', () => {
-    render(<ListerCard {...baseProps} channel="sale" town="Reading" agency={null} />)
+    render(
+      <ListerCard {...baseProps} channel="sale" town="Reading" agency={null} />,
+    )
     expect(screen.getByText('Private seller')).toBeInTheDocument()
   })
 
   it('shows a Private landlord badge for a rent listing with no agency', () => {
-    render(<ListerCard {...baseProps} channel="rent" town="Reading" agency={null} />)
+    render(
+      <ListerCard {...baseProps} channel="rent" town="Reading" agency={null} />,
+    )
     expect(screen.getByText('Private landlord')).toBeInTheDocument()
   })
 

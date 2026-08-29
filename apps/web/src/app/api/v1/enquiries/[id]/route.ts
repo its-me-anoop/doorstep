@@ -35,7 +35,10 @@ export async function PATCH(
   }
 
   const status = (rawBody as { status?: unknown }).status
-  if (typeof status !== 'string' || !VALID_STATUSES.has(status as EnquiryStatus)) {
+  if (
+    typeof status !== 'string' ||
+    !VALID_STATUSES.has(status as EnquiryStatus)
+  ) {
     return apiError(400, 'validation_error', 'Invalid status.')
   }
 

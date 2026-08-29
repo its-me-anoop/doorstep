@@ -42,11 +42,7 @@ import { SystemClock } from '@/adapters/system-clock'
 import { createCaptchaVerifier } from '@/adapters/turnstile'
 import { createRateLimiter } from '@/adapters/upstash'
 import type { PlaceSearcher } from '@/ports/geocoder'
-import {
-  DeleteAccount,
-  GetMe,
-  UpdateProfile,
-} from '@/services/account'
+import { DeleteAccount, GetMe, UpdateProfile } from '@/services/account'
 import {
   DecideListing,
   GetMetrics,

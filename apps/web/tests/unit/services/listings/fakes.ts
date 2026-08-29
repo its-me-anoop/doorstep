@@ -117,8 +117,9 @@ export class FakeListingRepository implements ListingReader, ListingWriter {
   }
 
   async countByStatus(status: PropertyStatus): Promise<number> {
-    return [...this.byId.values()].filter((listing) => listing.status === status)
-      .length
+    return [...this.byId.values()].filter(
+      (listing) => listing.status === status,
+    ).length
   }
 
   async countLiveByChannel(): Promise<{ sale: number; rent: number }> {

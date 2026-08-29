@@ -25,9 +25,13 @@ for (const { path, title } of LEGAL_PAGES) {
       const response = await page.goto(path)
       expect(response?.status()).toBe(200)
 
-      await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible()
+      await expect(
+        page.getByRole('heading', { level: 1, name: title }),
+      ).toBeVisible()
 
-      const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze()
+      const results = await new AxeBuilder({ page })
+        .withTags(WCAG_TAGS)
+        .analyze()
       expect(results.violations).toEqual([])
     })
   })

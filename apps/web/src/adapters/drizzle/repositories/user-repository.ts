@@ -120,19 +120,14 @@ export class DrizzleUserRepository implements UserRepository {
     return mapRowToUser(row)
   }
 
-  async search(
-    options: UserSearchOptions = {},
-  ): Promise<UserCursorPage> {
+  async search(options: UserSearchOptions = {}): Promise<UserCursorPage> {
     const { q, cursor, limit = DEFAULT_PAGE_LIMIT } = options
     const clauses: SQL[] = []
 
     if (q) {
       const pattern = `%${q}%`
       clauses.push(
-        or(
-          ilike(users.displayName, pattern),
-          ilike(users.email, pattern),
-        )!,
+        or(ilike(users.displayName, pattern), ilike(users.email, pattern))!,
       )
     }
     if (cursor) {

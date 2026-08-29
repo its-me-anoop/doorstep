@@ -90,7 +90,11 @@ export class SubmitEnquiry {
     const email = data.email.toLowerCase()
     const ip = input.remoteIp ?? 'unknown'
 
-    await this.assertRateLimit(`enquiry:ip:${ip}`, RATE_LIMIT, RATE_WINDOW_SECONDS)
+    await this.assertRateLimit(
+      `enquiry:ip:${ip}`,
+      RATE_LIMIT,
+      RATE_WINDOW_SECONDS,
+    )
     await this.assertRateLimit(
       `enquiry:email:${email}`,
       RATE_LIMIT,
@@ -122,7 +126,9 @@ export class SubmitEnquiry {
 
     const lister = await this.userRepository.findById(listing.listerId)
     if (!lister) {
-      throw new Error(`Lister ${listing.listerId} not found for enquiry delivery`)
+      throw new Error(
+        `Lister ${listing.listerId} not found for enquiry delivery`,
+      )
     }
 
     const agency = listing.agencyId

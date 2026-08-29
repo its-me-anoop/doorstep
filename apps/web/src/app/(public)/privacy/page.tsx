@@ -10,11 +10,11 @@ export default function PrivacyPage() {
   return (
     <LegalLayout title="Privacy policy">
       <p>
-        Doorstep is operated by Flutterly Ltd (&ldquo;we&rdquo;, &ldquo;us&rdquo;),
-        company number placeholder, registered in England and Wales. This policy
-        explains how we collect, use, and protect personal data when you use
-        doorstep.co.uk and related services, in line with UK GDPR and the Data
-        Protection Act 2018.
+        Doorstep is operated by Flutterly Ltd (&ldquo;we&rdquo;,
+        &ldquo;us&rdquo;), company number placeholder, registered in England and
+        Wales. This policy explains how we collect, use, and protect personal
+        data when you use doorstep.co.uk and related services, in line with UK
+        GDPR and the Data Protection Act 2018.
       </p>
 
       <h2>What we collect</h2>
@@ -42,8 +42,13 @@ export default function PrivacyPage() {
       <ul>
         <li>Provide the property search and listing platform.</li>
         <li>Deliver enquiries to listers and send transactional emails.</li>
-        <li>Moderate content, prevent abuse, and comply with legal obligations.</li>
-        <li>Improve reliability and understand aggregate demand in our launch areas.</li>
+        <li>
+          Moderate content, prevent abuse, and comply with legal obligations.
+        </li>
+        <li>
+          Improve reliability and understand aggregate demand in our launch
+          areas.
+        </li>
       </ul>
       <p>
         Our lawful bases include contract (providing the service you request),

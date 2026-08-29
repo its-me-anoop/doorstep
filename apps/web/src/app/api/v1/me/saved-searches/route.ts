@@ -77,9 +77,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           }
         : null,
     radiusMetres:
-      criteria.radiusMetres != null
-        ? Number(criteria.radiusMetres)
-        : null,
+      criteria.radiusMetres != null ? Number(criteria.radiusMetres) : null,
     filters:
       criteria.filters && typeof criteria.filters === 'object'
         ? (criteria.filters as Record<string, unknown>)

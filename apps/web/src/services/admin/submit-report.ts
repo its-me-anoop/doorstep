@@ -3,7 +3,11 @@
  */
 
 import { submitReportSchema } from '@/lib/validation/report'
-import type { NewReport, Report, ReportRepository } from '@/ports/report-repository'
+import type {
+  NewReport,
+  Report,
+  ReportRepository,
+} from '@/ports/report-repository'
 import type { User } from '@/ports/user-repository'
 
 import { ReportValidationError } from './errors'

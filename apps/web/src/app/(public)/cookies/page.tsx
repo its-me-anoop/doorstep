@@ -27,8 +27,8 @@ export default function CookiesPage() {
         <h2 className="text-[length:var(--text-h3)]">Preference storage</h2>
         <p>
           We store your cookie-banner choice in your browser&rsquo;s local
-          storage so we do not ask again on every visit. Until you accept,
-          we run essential-only mode.
+          storage so we do not ask again on every visit. Until you accept, we
+          run essential-only mode.
         </p>
 
         <h2 className="text-[length:var(--text-h3)]">Analytics</h2>
@@ -44,7 +44,9 @@ export default function CookiesPage() {
           Blocking essential cookies will prevent you from staying signed in.
         </p>
 
-        <p className="text-muted-foreground text-sm">Last updated: August 2026</p>
+        <p className="text-muted-foreground text-sm">
+          Last updated: August 2026
+        </p>
       </div>
     </div>
   )

@@ -51,7 +51,9 @@ export class DrizzleAuditLogRepository implements AuditLogRepository {
       })
       .returning()
     if (!row) {
-      throw new Error('DrizzleAuditLogRepository.append: insert returned no row')
+      throw new Error(
+        'DrizzleAuditLogRepository.append: insert returned no row',
+      )
     }
     return mapRowToAuditLogEntry(row)
   }

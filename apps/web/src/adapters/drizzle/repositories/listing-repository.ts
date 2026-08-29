@@ -327,10 +327,7 @@ export class DrizzleListingRepository implements ListingReader, ListingWriter {
   async listPendingReview(
     options?: ListListingsOptions,
   ): Promise<ListingCursorPage<Listing>> {
-    return this.listByOldest(
-      eq(properties.status, 'pending_review'),
-      options,
-    )
+    return this.listByOldest(eq(properties.status, 'pending_review'), options)
   }
 
   async countByStatus(status: PropertyStatus): Promise<number> {

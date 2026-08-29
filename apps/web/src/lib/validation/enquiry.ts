@@ -23,7 +23,7 @@ export const submitEnquirySchema = z.object({
     .max(30, 'Phone number is too long.')
     .optional()
     .nullable()
-    .transform((value) => (value === '' ? null : value ?? null)),
+    .transform((value) => (value === '' ? null : (value ?? null))),
   message: z
     .string()
     .trim()

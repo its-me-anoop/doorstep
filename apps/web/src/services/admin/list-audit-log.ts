@@ -15,7 +15,10 @@ import { AccountSuspendedError } from '../auth/errors'
 export class ListAuditLog {
   constructor(private readonly auditLogRepository: AuditLogRepository) {}
 
-  async execute(actor: User, filter: AuditLogFilter = {}): Promise<AuditLogPage> {
+  async execute(
+    actor: User,
+    filter: AuditLogFilter = {},
+  ): Promise<AuditLogPage> {
     if (actor.status !== 'active') {
       throw new AccountSuspendedError(actor.status)
     }

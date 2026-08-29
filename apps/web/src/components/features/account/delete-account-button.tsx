@@ -49,9 +49,9 @@ export function DeleteAccountButton() {
   return (
     <div className="border-destructive/30 bg-destructive/5 rounded-[var(--radius-md)] border p-4">
       <p className="text-foreground text-sm leading-relaxed">
-        This permanently deletes your Doorstep account, saved favourites,
-        and saved searches. Your listings will be hidden or removed. This
-        cannot be undone.
+        This permanently deletes your Doorstep account, saved favourites, and
+        saved searches. Your listings will be hidden or removed. This cannot be
+        undone.
       </p>
       {errorMessage && (
         <p className="text-destructive mt-2 text-sm" role="alert">

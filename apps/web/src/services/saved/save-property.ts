@@ -4,7 +4,10 @@
 
 import type { ListingReader } from '@/ports/listing-repository'
 import { ListingNotFoundError } from '@/ports/listing-repository'
-import type { SavedProperty, SavedPropertyRepository } from '@/ports/saved-property-repository'
+import type {
+  SavedProperty,
+  SavedPropertyRepository,
+} from '@/ports/saved-property-repository'
 import type { User } from '@/ports/user-repository'
 
 import { AccountSuspendedError } from '../auth/errors'

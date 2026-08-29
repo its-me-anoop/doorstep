@@ -80,7 +80,10 @@ export type {
   EnquiryWriter,
 } from './enquiry-repository'
 export { EnquiryNotFoundError } from './enquiry-repository'
-export type { SavedProperty, SavedPropertyRepository } from './saved-property-repository'
+export type {
+  SavedProperty,
+  SavedPropertyRepository,
+} from './saved-property-repository'
 export type {
   SavedSearch,
   NewSavedSearch,
@@ -108,7 +111,4 @@ export type {
 } from './report-repository'
 export { ReportNotFoundError } from './report-repository'
 export type { CaptchaVerifier } from './captcha-verifier'
-export type {
-  UserSearchOptions,
-  UserCursorPage,
-} from './user-repository'
+export type { UserSearchOptions, UserCursorPage } from './user-repository'

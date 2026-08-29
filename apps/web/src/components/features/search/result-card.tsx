@@ -59,7 +59,12 @@ function freshnessOrStatusBadge(
  * blurhash, so the placeholder under the image is a flat `--paper-200`
  * tile rather than a blurhash-decoded swatch).
  */
-export function ResultCard({ hit, now, signedIn = false, saved = false }: ResultCardProps) {
+export function ResultCard({
+  hit,
+  now,
+  signedIn = false,
+  saved = false,
+}: ResultCardProps) {
   const badge = freshnessOrStatusBadge(hit, now)
   const priceLine = formatPrice({
     channel: hit.channel,

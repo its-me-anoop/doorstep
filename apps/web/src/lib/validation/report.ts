@@ -13,7 +13,7 @@ export const submitReportSchema = z.object({
     .max(2000, 'Details are too long.')
     .optional()
     .nullable()
-    .transform((value) => (value === '' ? null : value ?? null)),
+    .transform((value) => (value === '' ? null : (value ?? null))),
 })
 
 export type SubmitReportInput = z.infer<typeof submitReportSchema>

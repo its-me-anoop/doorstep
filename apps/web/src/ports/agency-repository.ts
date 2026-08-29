@@ -27,7 +27,16 @@ export interface AgencyRepository {
   update(
     id: string,
     changes: Partial<
-      Pick<Agency, 'name' | 'logoPath' | 'phone' | 'email' | 'website' | 'address' | 'verified'>
+      Pick<
+        Agency,
+        | 'name'
+        | 'logoPath'
+        | 'phone'
+        | 'email'
+        | 'website'
+        | 'address'
+        | 'verified'
+      >
     >,
   ): Promise<Agency>
   list(options?: {

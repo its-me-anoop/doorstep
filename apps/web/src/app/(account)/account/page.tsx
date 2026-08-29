@@ -111,7 +111,10 @@ export default async function AccountPage() {
         <h2 className="text-[length:var(--text-h3)]">Delete account</h2>
         <p className="text-muted-foreground mt-2 max-w-[60ch] text-sm leading-relaxed">
           Remove your Doorstep profile and personal data in line with our{' '}
-          <Link href="/privacy" className="text-primary underline-offset-2 hover:underline">
+          <Link
+            href="/privacy"
+            className="text-primary underline-offset-2 hover:underline"
+          >
             privacy policy
           </Link>
           .

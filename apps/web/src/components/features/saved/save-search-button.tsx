@@ -28,7 +28,8 @@ export function searchUrlStateToSavedSearchCriteria(
   if (state.maxPrice !== undefined) filters.maxPrice = state.maxPrice
   if (state.minBeds !== undefined) filters.minBeds = state.minBeds
   if (state.maxBeds !== undefined) filters.maxBeds = state.maxBeds
-  if (state.type !== undefined && state.type.length > 0) filters.types = state.type
+  if (state.type !== undefined && state.type.length > 0)
+    filters.types = state.type
   if (state.furnished !== undefined && state.furnished.length > 0) {
     filters.furnished = state.furnished
   }

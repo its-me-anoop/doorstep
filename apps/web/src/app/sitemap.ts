@@ -55,7 +55,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     }))
   } catch (error) {
-    console.error('sitemap: listing URLs unavailable, emitting static+areas only:', error)
+    console.error(
+      'sitemap: listing URLs unavailable, emitting static+areas only:',
+      error,
+    )
   }
 
   return [...staticEntries, ...areaEntries, ...listingEntries]

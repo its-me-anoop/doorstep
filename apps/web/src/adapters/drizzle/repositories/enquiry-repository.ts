@@ -4,15 +4,7 @@
  * same shape as this directory's other repositories.
  */
 
-import {
-  and,
-  count,
-  desc,
-  eq,
-  lt,
-  or,
-  type SQL,
-} from 'drizzle-orm'
+import { and, count, desc, eq, lt, or, type SQL } from 'drizzle-orm'
 
 import type { EnquiryStatus } from '@/domain/enums'
 import {

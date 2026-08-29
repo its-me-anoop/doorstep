@@ -47,9 +47,9 @@ export function EnquiryForm({
   const [phone, setPhone] = useState(defaultPhone ?? '')
   const [message, setMessage] = useState('')
   const [viewingRequested, setViewingRequested] = useState(false)
-  const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>(
-    'idle',
-  )
+  const [status, setStatus] = useState<
+    'idle' | 'submitting' | 'success' | 'error'
+  >('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const turnstileRef = useRef<HTMLDivElement>(null)
@@ -113,7 +113,8 @@ export function EnquiryForm({
   if (status === 'success') {
     return (
       <p className="text-moss-500 text-sm leading-relaxed">
-        Thanks — your message has been sent. The lister will reply to your email.
+        Thanks — your message has been sent. The lister will reply to your
+        email.
       </p>
     )
   }
@@ -122,7 +123,12 @@ export function EnquiryForm({
     <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
       <div className="sr-only" aria-hidden="true">
         <Label htmlFor="enquiry-website">Website</Label>
-        <Input id="enquiry-website" name="website" tabIndex={-1} autoComplete="off" />
+        <Input
+          id="enquiry-website"
+          name="website"
+          tabIndex={-1}
+          autoComplete="off"
+        />
       </div>
 
       <div className="flex flex-col gap-1.5">

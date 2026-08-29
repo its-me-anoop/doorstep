@@ -61,7 +61,9 @@ export class ManageUser {
       case 'set_role':
         return this.setRole(actor, target, input.role)
       default:
-        throw new UserManagementValidationError(`Unknown action: ${input.action}`)
+        throw new UserManagementValidationError(
+          `Unknown action: ${input.action}`,
+        )
     }
   }
 
@@ -89,14 +91,23 @@ export class ManageUser {
     return updated
   }
 
-  private async setRole(actor: User, target: User, role?: UserRole): Promise<User> {
+  private async setRole(
+    actor: User,
+    target: User,
+    role?: UserRole,
+  ): Promise<User> {
     if (!role) {
       throw new UserManagementValidationError('role is required for set_role')
     }
 
     const updated = await this.userRepository.update(target.id, {
       role,
-      agencyId: role === 'agent' ? target.agencyId : role === 'admin' ? null : target.agencyId,
+      agencyId:
+        role === 'agent'
+          ? target.agencyId
+          : role === 'admin'
+            ? null
+            : target.agencyId,
     })
 
     await this.authGateway.setRoleClaims(target.firebaseUid, {

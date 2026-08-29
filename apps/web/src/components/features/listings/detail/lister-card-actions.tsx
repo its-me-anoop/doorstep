@@ -46,7 +46,7 @@ export function ListerCardActions({
   }
 
   return (
-    <div className="mt-6 flex flex-col gap-4 border-t border-border pt-6">
+    <div className="border-border mt-6 flex flex-col gap-4 border-t pt-6">
       {contactPhone && (
         <div>
           {phoneVisible ? (

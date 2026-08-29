@@ -12,7 +12,4 @@ export {
 export { SaveSearch } from './save-search'
 export { ListSavedSearches } from './list-saved-searches'
 export { DeleteSavedSearch } from './delete-saved-search'
-export {
-  SavedListingNotFoundError,
-  SavedSearchForbiddenError,
-} from './errors'
+export { SavedListingNotFoundError, SavedSearchForbiddenError } from './errors'

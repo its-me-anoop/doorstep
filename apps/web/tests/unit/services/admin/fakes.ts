@@ -10,7 +10,10 @@ import type {
   NewAuditLogEntry,
 } from '@/ports/audit-log-repository'
 import type { Agency, AgencyRepository } from '@/ports/agency-repository'
-import type { EventRepository, NewAnalyticsEvent } from '@/ports/event-repository'
+import type {
+  EventRepository,
+  NewAnalyticsEvent,
+} from '@/ports/event-repository'
 import type { AnalyticsEvent } from '@/ports/event-repository'
 import type {
   NewReport,
@@ -114,7 +117,9 @@ export class FakeReportRepository implements ReportRepository {
   async listOpen(options: { cursor?: string | null; limit?: number } = {}) {
     void options
     return {
-      data: [...this.byId.values()].filter((report) => report.status === 'open'),
+      data: [...this.byId.values()].filter(
+        (report) => report.status === 'open',
+      ),
       nextCursor: null,
     }
   }

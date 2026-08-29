@@ -2,7 +2,10 @@
  * ListSavedSearches — the signed-in user's saved filter sets.
  */
 
-import type { SavedSearch, SavedSearchRepository } from '@/ports/saved-search-repository'
+import type {
+  SavedSearch,
+  SavedSearchRepository,
+} from '@/ports/saved-search-repository'
 import type { User } from '@/ports/user-repository'
 
 import { AccountSuspendedError } from '../auth/errors'

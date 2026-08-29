@@ -29,9 +29,7 @@ export class ListPublishedSlugs {
         entries.push({
           slug: listing.slug,
           lastModified:
-            listing.statusChangedAt ??
-            listing.publishedAt ??
-            listing.createdAt,
+            listing.statusChangedAt ?? listing.publishedAt ?? listing.createdAt,
         })
       }
 

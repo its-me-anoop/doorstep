@@ -2,7 +2,10 @@
  * ListOpenReports — ADM-2 moderation feed of open user reports.
  */
 
-import type { ReportCursorPage, ReportRepository } from '@/ports/report-repository'
+import type {
+  ReportCursorPage,
+  ReportRepository,
+} from '@/ports/report-repository'
 import type { User } from '@/ports/user-repository'
 import { requireRole } from '@/services/authz/policies'
 

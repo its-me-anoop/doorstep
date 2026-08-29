@@ -12,7 +12,7 @@ export const updateProfileSchema = z.object({
     .max(30, 'Phone number is too long.')
     .optional()
     .nullable()
-    .transform((value) => (value === '' ? null : value ?? null)),
+    .transform((value) => (value === '' ? null : (value ?? null))),
 })
 
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>

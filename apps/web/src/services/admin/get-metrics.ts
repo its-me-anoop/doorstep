@@ -49,12 +49,7 @@ export class GetMetrics {
       this.listingReader.oldestPendingReviewAt(),
       this.userRepository.countCreatedSince(since),
       this.eventRepository.countByDay('search', since),
-      this.eventRepository.topPropertyValues(
-        'search',
-        'area',
-        since,
-        10,
-      ),
+      this.eventRepository.topPropertyValues('search', 'area', since, 10),
     ])
 
     return {

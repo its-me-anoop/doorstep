@@ -21,7 +21,10 @@ describe('LocationSection', () => {
       <LocationSection displayAddress="Oxford Road, Reading, RG30" geo={geo} />,
     )
     const iframe = screen.getByTitle('Property location map')
-    expect(iframe).toHaveAttribute('src', expect.stringContaining('openstreetmap.org'))
+    expect(iframe).toHaveAttribute(
+      'src',
+      expect.stringContaining('openstreetmap.org'),
+    )
   })
 
   it('notes approximate location when flagged', () => {

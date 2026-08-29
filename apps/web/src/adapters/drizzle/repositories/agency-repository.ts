@@ -148,7 +148,13 @@ export class DrizzleAgencyRepository implements AgencyRepository {
     changes: Partial<
       Pick<
         Agency,
-        'name' | 'logoPath' | 'phone' | 'email' | 'website' | 'address' | 'verified'
+        | 'name'
+        | 'logoPath'
+        | 'phone'
+        | 'email'
+        | 'website'
+        | 'address'
+        | 'verified'
       >
     >,
   ): Promise<Agency> {

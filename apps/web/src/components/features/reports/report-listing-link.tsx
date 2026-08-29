@@ -30,9 +30,9 @@ export function ReportListingLink({
   const [reason, setReason] = useState<string>(REASONS[0])
   const [details, setDetails] = useState('')
   const [email, setEmail] = useState(defaultEmail)
-  const [status, setStatus] = useState<'idle' | 'submitting' | 'done' | 'error'>(
-    'idle',
-  )
+  const [status, setStatus] = useState<
+    'idle' | 'submitting' | 'done' | 'error'
+  >('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   async function handleSubmit(event: React.FormEvent) {

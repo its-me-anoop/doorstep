@@ -2,7 +2,11 @@
  * SearchUsers — ADM-3 admin user lookup by name or email substring.
  */
 
-import type { User, UserCursorPage, UserRepository } from '@/ports/user-repository'
+import type {
+  User,
+  UserCursorPage,
+  UserRepository,
+} from '@/ports/user-repository'
 import { requireRole } from '@/services/authz/policies'
 
 import { AccountSuspendedError } from '../auth/errors'

@@ -57,11 +57,7 @@ export default async function FavouritesPage() {
                     ` · ${listing.displayStatus}`}
                 </p>
               </div>
-              <SaveHeartButton
-                propertyId={listing.id}
-                initialSaved
-                signedIn
-              />
+              <SaveHeartButton propertyId={listing.id} initialSaved signedIn />
             </li>
           ))}
         </ul>

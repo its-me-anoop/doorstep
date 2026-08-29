@@ -46,10 +46,7 @@ export interface EnquiryReader {
     options?: ListEnquiriesOptions,
   ): Promise<EnquiryCursorPage<Enquiry>>
   countByProperty(propertyId: string, status?: EnquiryStatus): Promise<number>
-  countNewForLister(
-    listerId: string,
-    agencyId: string | null,
-  ): Promise<number>
+  countNewForLister(listerId: string, agencyId: string | null): Promise<number>
 }
 
 export interface EnquiryWriter {

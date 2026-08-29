@@ -30,7 +30,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     <div className="mx-auto max-w-[960px] px-5 py-16 sm:px-8">
       <h1 className="text-[length:var(--text-h1)] leading-[1.12]">Admin</h1>
 
-      <nav className="mt-8 flex flex-wrap gap-4 border-b border-border pb-4">
+      <nav className="border-border mt-8 flex flex-wrap gap-4 border-b pb-4">
         {(
           [
             ['queue', 'Queue'],
@@ -78,7 +78,9 @@ async function QueueSection({
 
   if (page.data.length === 0) {
     return (
-      <p className="text-muted-foreground text-base">No listings awaiting review.</p>
+      <p className="text-muted-foreground text-base">
+        No listings awaiting review.
+      </p>
     )
   }
 
@@ -122,7 +124,9 @@ async function ReportsSection({
         >
           <p className="text-foreground font-medium">{report.reason}</p>
           {report.details && (
-            <p className="text-muted-foreground mt-2 text-sm">{report.details}</p>
+            <p className="text-muted-foreground mt-2 text-sm">
+              {report.details}
+            </p>
           )}
           <p className="text-muted-foreground mt-2 text-xs">
             Listing {report.propertyId} ·{' '}
@@ -198,7 +202,9 @@ async function MetricsSection({
       <Metric label="Pending review" value={metrics.pendingReviewCount} />
       <Metric label="New users (30d)" value={metrics.newUsersLast30Days} />
       <div className="sm:col-span-2">
-        <h2 className="text-foreground text-sm font-medium">Top searched areas</h2>
+        <h2 className="text-foreground text-sm font-medium">
+          Top searched areas
+        </h2>
         <ul className="text-muted-foreground mt-2 text-sm">
           {metrics.topSearchedAreas.map((row) => (
             <li key={row.value}>

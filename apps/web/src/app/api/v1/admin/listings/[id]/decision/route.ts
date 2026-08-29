@@ -45,9 +45,7 @@ export async function POST(
       listingId: id,
       decision: body.decision as ListingDecision,
       rejectionReason:
-        body.rejectionReason != null
-          ? String(body.rejectionReason)
-          : null,
+        body.rejectionReason != null ? String(body.rejectionReason) : null,
     })
 
     return NextResponse.json({ data: { listing } })
@@ -59,10 +57,7 @@ export async function POST(
     const mapped = mapCommonApiError(error)
     if (mapped) return mapped
 
-    console.error(
-      'POST /api/v1/admin/listings/[id]/decision failed:',
-      error,
-    )
+    console.error('POST /api/v1/admin/listings/[id]/decision failed:', error)
     return apiError(500, 'internal_error', 'Something went wrong on our side')
   }
 }

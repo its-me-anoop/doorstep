@@ -28,9 +28,10 @@ export default function TermsPage() {
 
         <h2 className="text-[length:var(--text-h3)]">Your account</h2>
         <p>
-          You must provide accurate information and keep your credentials secure.
-          You are responsible for activity under your account. We may suspend or
-          terminate accounts that breach these terms or our community standards.
+          You must provide accurate information and keep your credentials
+          secure. You are responsible for activity under your account. We may
+          suspend or terminate accounts that breach these terms or our community
+          standards.
         </p>
 
         <h2 className="text-[length:var(--text-h3)]">Listings and enquiries</h2>
@@ -59,12 +60,14 @@ export default function TermsPage() {
 
         <h2 className="text-[length:var(--text-h3)]">Governing law</h2>
         <p>
-          These terms are governed by the laws of England and Wales. Disputes are
-          subject to the exclusive jurisdiction of the courts of England and
+          These terms are governed by the laws of England and Wales. Disputes
+          are subject to the exclusive jurisdiction of the courts of England and
           Wales.
         </p>
 
-        <p className="text-muted-foreground text-sm">Last updated: August 2026</p>
+        <p className="text-muted-foreground text-sm">
+          Last updated: August 2026
+        </p>
       </div>
     </div>
   )

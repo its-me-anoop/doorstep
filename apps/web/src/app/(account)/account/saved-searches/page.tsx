@@ -46,7 +46,9 @@ export default async function SavedSearchesPage() {
                   </Link>
                   <p className="text-muted-foreground mt-1 text-sm">
                     {search.criteria.locationLabel || 'Anywhere'} ·{' '}
-                    {search.criteria.channel === 'sale' ? 'For sale' : 'To rent'}
+                    {search.criteria.channel === 'sale'
+                      ? 'For sale'
+                      : 'To rent'}
                   </p>
                 </div>
                 <DeleteSavedSearchButton searchId={search.id} />

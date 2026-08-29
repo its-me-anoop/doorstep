@@ -18,9 +18,7 @@ export default async function ListerEnquiriesPage() {
 
   return (
     <div className="mx-auto max-w-[880px] px-5 py-16 sm:px-8">
-      <h1 className="text-[length:var(--text-h1)] leading-[1.12]">
-        Enquiries
-      </h1>
+      <h1 className="text-[length:var(--text-h1)] leading-[1.12]">Enquiries</h1>
       <p className="text-muted-foreground mt-3 max-w-[60ch] text-base leading-relaxed">
         Messages from people interested in your listings.
       </p>
