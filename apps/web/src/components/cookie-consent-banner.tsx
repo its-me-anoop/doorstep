@@ -1,36 +1,47 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
 
 import { Button } from '@/components/ui/button'
 
 const STORAGE_KEY = 'doorstep-cookie-consent'
 
+function subscribe(onStoreChange: () => void): () => void {
+  window.addEventListener('storage', onStoreChange)
+  return () => window.removeEventListener('storage', onStoreChange)
+}
+
+function readConsent(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
 /**
  * Essential-only cookie banner until the visitor accepts analytics
- * preferences (M6). Stores choice in localStorage.
+ * preferences (M6). Stores choice in localStorage. Visibility is derived
+ * via useSyncExternalStore so we never setState inside an effect.
  */
 export function CookieConsentBanner() {
-  const [visible, setVisible] = useState(false)
+  const consent = useSyncExternalStore(
+    subscribe,
+    readConsent,
+    () => 'ssr-hidden',
+  )
+  const visible = consent === null
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (!stored) setVisible(true)
-    } catch {
-      setVisible(true)
-    }
-  }, [])
-
-  function accept() {
+  const accept = useCallback(() => {
     try {
       localStorage.setItem(STORAGE_KEY, 'essential')
+      // Same-tab updates don't fire `storage`; nudge subscribers manually.
+      window.dispatchEvent(new Event('storage'))
     } catch {
       // ignore quota errors
     }
-    setVisible(false)
-  }
+  }, [])
 
   if (!visible) return null
 
@@ -43,7 +54,10 @@ export function CookieConsentBanner() {
       <p className="text-foreground text-sm leading-relaxed">
         We use essential cookies to keep you signed in and remember your
         preferences. We do not use analytics cookies until you accept. See our{' '}
-        <Link href="/cookies" className="text-primary underline-offset-2 hover:underline">
+        <Link
+          href="/cookies"
+          className="text-primary underline-offset-2 hover:underline"
+        >
           cookie policy
         </Link>
         .

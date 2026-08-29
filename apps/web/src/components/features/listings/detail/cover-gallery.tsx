@@ -60,7 +60,6 @@ function narrowestUrl(
 export function CoverGallery({ title, images }: CoverGalleryProps) {
   const [selectedId, setSelectedId] = useState(images[0]?.id)
   const [lightboxOpen, setLightboxOpen] = useState(false)
-  const selected = images.find((image) => image.id === selectedId) ?? images[0]
 
   const photos = images.filter((image) => image.kind === 'photo')
   const floorplans = images.filter((image) => image.kind === 'floorplan')
@@ -79,11 +78,10 @@ export function CoverGallery({ title, images }: CoverGalleryProps) {
           ? photos
           : images
 
-  useEffect(() => {
-    if (!tabImages.some((image) => image.id === selectedId)) {
-      setSelectedId(tabImages[0]?.id)
-    }
-  }, [activeTab, selectedId, tabImages])
+  // Derive selection from the active tab rather than syncing via effect —
+  // when the current id isn't in the tab's images, fall back to the first.
+  const selected =
+    tabImages.find((image) => image.id === selectedId) ?? tabImages[0]
 
   useEffect(() => {
     if (!lightboxOpen) return
@@ -93,6 +91,21 @@ export function CoverGallery({ title, images }: CoverGalleryProps) {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [lightboxOpen])
+
+  function selectTab(tab: 'photos' | 'floorplan' | 'epc') {
+    setActiveTab(tab)
+    const next =
+      tab === 'floorplan'
+        ? floorplans
+        : tab === 'epc'
+          ? epcImages
+          : photos.length > 0
+            ? photos
+            : images
+    if (!next.some((image) => image.id === selectedId)) {
+      setSelectedId(next[0]?.id)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -110,7 +123,7 @@ export function CoverGallery({ title, images }: CoverGalleryProps) {
               <button
                 key={tab}
                 type="button"
-                onClick={() => setActiveTab(tab)}
+                onClick={() => selectTab(tab)}
                 className={cn(
                   'rounded-[var(--radius-sm)] px-3 py-1 text-sm font-medium',
                   activeTab === tab
