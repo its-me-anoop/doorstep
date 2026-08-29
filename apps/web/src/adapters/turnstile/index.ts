@@ -56,7 +56,13 @@ export class TurnstileCaptchaVerifier implements CaptchaVerifier {
 export function createCaptchaVerifier(): CaptchaVerifier {
   const secret = process.env.TURNSTILE_SECRET_KEY
   if (secret) return new TurnstileCaptchaVerifier(secret)
-  if (process.env.NODE_ENV === 'production') {
+  // Skip the production warning during `next build` / static generation —
+  // createServices() may construct this verifier while collecting page
+  // data even though no guest enquiry will run. Warn only at true runtime.
+  const isBuild =
+    process.env.NEXT_PHASE === 'phase-production-build' ||
+    process.env.CI === 'true'
+  if (process.env.NODE_ENV === 'production' && !isBuild) {
     console.warn(
       'createCaptchaVerifier: TURNSTILE_SECRET_KEY unset in production — guest captcha is AllowAll (fail-open for boot). Set the secret before beta traffic.',
     )
