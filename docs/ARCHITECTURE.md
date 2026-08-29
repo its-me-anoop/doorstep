@@ -38,7 +38,7 @@ flowchart LR
   end
   subgraph Vercel[Vercel — region lhr1]
     N[Next.js App Router\nRSC pages + /api/v1 route handlers\nsrc/proxy.ts for route gating]
-    C[Cron jobs\noutbox drain (every minute) + nightly reindex (03:00) — M2\nretention anonymisation — M5\nsitemaps via app/sitemap.ts — M6]
+    C[Cron jobs\noutbox drain (Hobby: GH Actions 5m + daily Vercel safety net;\nPro: every-minute Vercel cron) + nightly reindex (03:00) — M2\nretention anonymisation — M5\nsitemaps via app/sitemap.ts — M6]
   end
   subgraph Data
     P[(Neon Postgres + PostGIS\nsource of truth, eu-west-2)]
@@ -332,9 +332,13 @@ published → under_offer → completed → archived`, with `rejected` and
   (§10) — this is no longer a not-yet-built path. As of M2, the table is
   drained for real too: `DrizzleOutboxRepository`
   (`src/adapters/drizzle/repositories/outbox-repository.ts`) claims
-  unprocessed rows and `GET /api/cron/outbox-drain` runs every minute via
-  a `crons` entry in `apps/web/vercel.json` — see §14 for the full
-  concurrency and cadence story.
+  unprocessed rows and `GET /api/cron/outbox-drain` is the drain
+  endpoint. Vercel Hobby forbids sub-daily Cron Jobs, so
+  `apps/web/vercel.json` schedules a daily safety-net drain and
+  `.github/workflows/outbox-drain.yml` pings the endpoint every 5
+  minutes when `APP_URL`/`CRON_SECRET` secrets are set. On Vercel Pro,
+  restore `* * * * *` in vercel.json for the literal 1-minute SLA —
+  see §14 for the full concurrency and cadence story.
 - **PostGIS for location.** `properties.location` is
   `geography(Point, 4326)` with a GIST index, enabling efficient
   radius/bbox queries directly in Postgres as a fallback/reconciliation
@@ -419,7 +423,7 @@ geocoding — four of the six rows below are now real.
 | Email (`Mailer`)               | Yes                                | **Real as of M4** — `adapters/resend/` (`ResendMailer` + `ConsoleMailer` fallback). Enquiry and admin decision emails                                                                                                                                                                                               | Done (M4)                                                    |
 | Rate limiting (`RateLimiter`)  | Yes                                | **Real as of M4** — `adapters/upstash/` (`UpstashRateLimiter` + `InMemoryRateLimiter` fallback). Enquiry submit + API abuse controls                                                                                                                                                                                | Done (M4)                                                    |
 | Geocoding (`Geocoder`)         | Yes                                | **Real as of M2** — `adapters/postcodesio/` resolves full/partial UK postcodes (§12) and, as the _default_ free-text place-search provider, its own keyless Places API; `adapters/mapbox/` is a real, unit-tested `Geocoder` implementation too, wired instead whenever `MAPBOX_ACCESS_TOKEN` is set (ADR-0007, §17) | Done (M1 postcode fast path; M2 place search, both branches) |
-| Outbox drain worker            | Yes (`OutboxRepository`, added M2) | **Real as of M2** — `DrizzleOutboxRepository` (`SELECT ... FOR UPDATE SKIP LOCKED` + lease), `DrainOutbox` use case, `GET /api/cron/outbox-drain` on a `* * * * *` Vercel Cron entry in `apps/web/vercel.json`. See §14                                                                                              | Done (M2)                                                    |
+| Outbox drain worker            | Yes (`OutboxRepository`, added M2) | **Real as of M2** — `DrizzleOutboxRepository` (`SELECT ... FOR UPDATE SKIP LOCKED` + lease), `DrainOutbox` use case, `GET /api/cron/outbox-drain`. Hobby: daily Vercel safety-net cron + GitHub Actions every 5 minutes; Pro: restore `* * * * *` in vercel.json. See §14 | Done (M2)                                                    |
 
 Explicitly, M0 did **not** build: the listing wizard, image pipeline, search
 API, map view, enquiries, or admin queue. M1 built the first two of those
@@ -744,12 +748,18 @@ succeed — if either throws, nothing in the batch is marked processed and
 the lease simply expires for a later run to retry, which is safe because
 every op here is idempotent (Meilisearch upsert/delete keyed on `id`).
 
-**Cadence vs the exit criterion.** `apps/web/vercel.json`'s
-`/api/cron/outbox-drain` entry runs `"* * * * *"` — every minute — which
-is the literal mechanism PRD §13's M2 exit criterion ("publish-to-
-searchable under 1 minute") and PRD §6.5 LST-5 ride on: a mutation
-committed at T is claimed and applied by the drain run that starts
-sometime in `(T, T+60s]`. `GET /api/cron/outbox-drain`
+**Cadence vs the exit criterion.** PRD §13's M2 exit criterion
+("publish-to-searchable under 1 minute") and PRD §6.5 LST-5 ride on
+`GET /api/cron/outbox-drain` being invoked about once a minute.
+Vercel Hobby forbids sub-daily Cron Jobs (deployment fails with that
+message if vercel.json contains `* * * * *`), so this repo ships a
+Hobby-compatible split: `apps/web/vercel.json` schedules a daily
+safety-net drain (`0 2 * * *`), and `.github/workflows/outbox-drain.yml`
+pings the same endpoint every 5 minutes when the `APP_URL` and
+`CRON_SECRET` repository secrets are set (~5-minute lag on Hobby). On
+Vercel Pro, restore `"* * * * *"` for `/api/cron/outbox-drain` in
+vercel.json for the literal 1-minute SLA; the GitHub Action then becomes
+optional redundancy. `GET /api/cron/outbox-drain`
 (`src/app/api/cron/outbox-drain/route.ts`) is a `GET` handler, not `POST`
 — Vercel Cron Jobs always invoke the configured path with `GET`, so a
 `POST`-only handler would 405 on every real trigger. Authorisation is

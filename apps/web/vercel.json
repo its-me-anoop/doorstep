@@ -4,7 +4,7 @@
   "crons": [
     {
       "path": "/api/cron/outbox-drain",
-      "schedule": "* * * * *"
+      "schedule": "0 2 * * *"
     },
     {
       "path": "/api/cron/reindex",

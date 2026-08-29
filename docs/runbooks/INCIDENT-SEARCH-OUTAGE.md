@@ -19,7 +19,12 @@
 
 Search visibility depends on the outbox consumer (PRD §6.5 LST-5):
 
-1. Confirm Vercel cron `GET /api/cron/outbox-drain` is firing (`vercel.json`, every minute).
+1. Confirm the outbox drain is firing — on Vercel Hobby via
+   `.github/workflows/outbox-drain.yml` (every 5 minutes when `APP_URL` /
+   `CRON_SECRET` secrets are set) or, on Vercel Pro, via
+   `GET /api/cron/outbox-drain` on a `* * * * *` schedule in
+   `apps/web/vercel.json`. Hobby `vercel.json` keeps a daily safety-net
+   drain only (sub-daily Vercel Cron Jobs require Pro).
 2. Manually trigger with `CRON_SECRET`:
    ```bash
    curl -H "Authorization: Bearer $CRON_SECRET" \

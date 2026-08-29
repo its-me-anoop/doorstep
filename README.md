@@ -72,10 +72,13 @@ Full milestone plan: [`docs/PRD.md` §13](docs/PRD.md#13-milestones-and-delivery
     lease (`src/adapters/drizzle/repositories/outbox-repository.ts`),
     re-derives each entry from Postgres's _current_ state rather than
     trusting a possibly-stale `op`, and issues one batched
-    upsert/delete call to Meilisearch. `GET /api/cron/outbox-drain` runs
-    it every minute (`apps/web/vercel.json`'s `* * * * *` cron), gated by
-    `CRON_SECRET` (`src/lib/verify-cron-request.ts`) — this is what the
-    PRD §6.5 LST-5 "search visibility within 1 minute" target rides on.
+    upsert/delete call to Meilisearch. `GET /api/cron/outbox-drain`
+    is the drain endpoint (gated by `CRON_SECRET`). On Vercel Hobby the
+    vercel.json schedule is daily (Hobby forbids sub-daily crons); the
+    `.github/workflows/outbox-drain.yml` workflow pings it every 5
+    minutes when `APP_URL`/`CRON_SECRET` secrets are set. On Vercel Pro,
+    restore `* * * * *` in vercel.json for the PRD §6.5 LST-5
+    "search visibility within 1 minute" target.
   - **Nightly reindex** — `GET /api/cron/reindex` (03:00 daily cron) runs
     `RebuildSearchIndex` (`src/services/search-sync/rebuild-search-index.ts`):
     clear-then-rebuild from Postgres, page by page, comparing Postgres's
