@@ -585,16 +585,20 @@ requests that would all just 503.
    Production) — previews and prod must use different prefixes/projects
    so their index documents never collide.
 3. Generate and set `CRON_SECRET` (`openssl rand -hex 32`) in Vercel's env
-   vars — this is what authorises `apps/web/vercel.json`'s two cron
-   routes (`/api/cron/outbox-drain` every minute, `/api/cron/reindex`
-   nightly at 03:00 UTC); Vercel attaches
+   vars — this is what authorises `apps/web/vercel.json`'s cron
+   routes (`/api/cron/outbox-drain` daily safety-net on Hobby — restore
+   `* * * * *` on Pro — `/api/cron/reindex` nightly at 03:00 UTC,
+   `/api/cron/retention` at 04:00); Vercel attaches
    `Authorization: Bearer ${CRON_SECRET}` to its own scheduled requests
-   automatically once the var is set, and both routes reject every other
-   request with a 401 while it's unset.
+   automatically once the var is set, and the routes reject every other
+   request with a 401 while it's unset. Also set the same `CRON_SECRET`
+   plus `APP_URL` as GitHub Actions secrets so
+   `.github/workflows/outbox-drain.yml` can keep search lag near the
+   1-minute SLA on Hobby (every 5 minutes).
 4. After the first deploy, trigger `/api/cron/reindex` once by hand
    (`curl -H "Authorization: Bearer $CRON_SECRET" https://<prod-url>/api/cron/reindex`)
    so the index has settings and documents applied before the
-   once-a-minute outbox drain has anything incremental to apply on top.
+   outbox drain has anything incremental to apply on top.
 5. `MAPBOX_ACCESS_TOKEN` is optional — see the [environment variables
    table](#environment-variables) and ADR-0007. Leaving it unset is a
    supported permanent choice (postcodes.io's Places API serves free-text

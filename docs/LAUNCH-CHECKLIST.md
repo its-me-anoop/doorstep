@@ -22,6 +22,7 @@ Tracks PRD section 17 items for beta launch in Reading.
 | Seed content (2–3 agencies, 50+ listings) | `pnpm seed` | Partner agencies, real stock |
 | Moderation rota (first weeks) | Admin queue UI | Team schedule |
 | Search-down Saturday runbook | [`runbooks/INCIDENT-SEARCH-OUTAGE.md`](runbooks/INCIDENT-SEARCH-OUTAGE.md) | On-call assignment |
+| Outbox drain cadence (1-min SLA) | Hobby: GH Actions 5m + daily Vercel safety-net; Pro: restore `* * * * *` | Set `APP_URL`/`CRON_SECRET` GH secrets; consider Vercel Pro |
 | Detail location map (DET-3) | OSM embed on `/property/{slug}` | — |
 
 ## M4–M6 code delivered (this branch)
