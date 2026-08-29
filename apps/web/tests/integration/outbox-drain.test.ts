@@ -109,6 +109,7 @@ describe.skipIf(!TEST_DATABASE_URL || !TEST_MEILISEARCH_HOST)(
         firebaseUid: `firebase-${crypto.randomUUID()}`,
         email: `lister-${crypto.randomUUID()}@example.co.uk`,
         displayName: 'Test Lister',
+        phone: null,
         role: 'owner',
         agencyId: null,
         status: 'active',

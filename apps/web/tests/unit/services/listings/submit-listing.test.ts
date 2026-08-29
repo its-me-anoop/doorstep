@@ -36,6 +36,7 @@ function user(overrides: Partial<User> = {}): User {
     firebaseUid: 'firebase-uid-1',
     email: 'jamie@example.co.uk',
     displayName: 'Jamie Example',
+    phone: null,
     role: 'owner',
     agencyId: null,
     status: 'active',
