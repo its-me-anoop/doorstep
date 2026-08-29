@@ -31,6 +31,8 @@
   "dependencies": {
     "@base-ui/react": "^1.6.0",
     "@hookform/resolvers": "^5.7.1",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.3",
     "blurhash": "^2.0.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -46,6 +48,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-hook-form": "^7.84.0",
+    "resend": "^6.24.0",
     "shadcn": "^4.16.1",
     "sharp": "^0.35.3",
     "tailwind-merge": "^3.6.0",

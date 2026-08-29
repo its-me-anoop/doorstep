@@ -33,6 +33,7 @@ describe('mapRowToUser', () => {
       firebaseUid: row.firebaseUid,
       email: row.email,
       displayName: row.displayName,
+      phone: row.phone,
       role: row.role,
       agencyId: row.agencyId,
       status: row.status,

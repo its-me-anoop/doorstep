@@ -51,6 +51,32 @@ export class FakeAgencyRepository implements AgencyRepository {
     return created
   }
 
+  async update(
+    id: string,
+    changes: Partial<
+      Pick<
+        Agency,
+        'name' | 'logoPath' | 'phone' | 'email' | 'website' | 'address' | 'verified'
+      >
+    >,
+  ): Promise<Agency> {
+    const existing = this.byId.get(id)
+    if (!existing) {
+      throw new Error(`FakeAgencyRepository.update: no agency with id ${id}`)
+    }
+    const updated: Agency = {
+      ...existing,
+      ...changes,
+      updatedAt: new Date(),
+    }
+    this.byId.set(id, updated)
+    return updated
+  }
+
+  async list(): Promise<{ data: Agency[]; nextCursor: string | null }> {
+    return { data: [], nextCursor: null }
+  }
+
   /** Test helper: seed an agency directly, bypassing create(). */
   seed(agency: Agency): void {
     this.byId.set(agency.id, agency)

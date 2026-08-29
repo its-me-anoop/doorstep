@@ -9,13 +9,15 @@
  * in-memory fake `Db` later without touching a real connection.
  */
 
-import { eq } from 'drizzle-orm'
+import { and, count, desc, eq, gte, ilike, lt, or, type SQL } from 'drizzle-orm'
 import postgres from 'postgres'
 
 import {
   UniqueViolationError,
   type User,
+  type UserCursorPage,
   type UserRepository,
+  type UserSearchOptions,
 } from '@/ports/user-repository'
 
 import type { Db } from '../client'
@@ -23,6 +25,7 @@ import { users } from '../schema'
 
 type UserRow = typeof users.$inferSelect
 
+const DEFAULT_PAGE_LIMIT = 20
 const POSTGRES_UNIQUE_VIOLATION = '23505'
 
 /**
@@ -54,6 +57,7 @@ export function mapRowToUser(row: UserRow): User {
     firebaseUid: row.firebaseUid,
     email: row.email,
     displayName: row.displayName,
+    phone: row.phone,
     role: row.role,
     agencyId: row.agencyId,
     status: row.status,
@@ -89,6 +93,7 @@ export class DrizzleUserRepository implements UserRepository {
           firebaseUid: user.firebaseUid,
           email: user.email,
           displayName: user.displayName,
+          phone: user.phone,
           role: user.role,
           agencyId: user.agencyId,
           status: user.status,
@@ -113,5 +118,51 @@ export class DrizzleUserRepository implements UserRepository {
       throw new Error(`DrizzleUserRepository.update: no user with id ${id}`)
     }
     return mapRowToUser(row)
+  }
+
+  async search(
+    options: UserSearchOptions = {},
+  ): Promise<UserCursorPage> {
+    const { q, cursor, limit = DEFAULT_PAGE_LIMIT } = options
+    const clauses: SQL[] = []
+
+    if (q) {
+      const pattern = `%${q}%`
+      clauses.push(
+        or(
+          ilike(users.displayName, pattern),
+          ilike(users.email, pattern),
+        )!,
+      )
+    }
+    if (cursor) {
+      clauses.push(lt(users.id, cursor))
+    }
+
+    const where = clauses.length > 0 ? and(...clauses) : undefined
+
+    const rows = await this.db
+      .select()
+      .from(users)
+      .where(where)
+      .orderBy(desc(users.id))
+      .limit(limit + 1)
+
+    const page = rows.slice(0, limit)
+    const nextCursor = rows.length > limit ? (page.at(-1)?.id ?? null) : null
+
+    return { data: page.map(mapRowToUser), nextCursor }
+  }
+
+  async countCreatedSince(since: Date): Promise<number> {
+    const [row] = await this.db
+      .select({ value: count() })
+      .from(users)
+      .where(gte(users.createdAt, since))
+    return row?.value ?? 0
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.db.delete(users).where(eq(users.id, id))
   }
 }

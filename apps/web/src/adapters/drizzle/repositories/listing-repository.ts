@@ -21,9 +21,22 @@
  * land or neither does.
  */
 
-import { and, count, desc, eq, inArray, lt, type SQL } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  between,
+  count,
+  desc,
+  eq,
+  gt,
+  inArray,
+  lt,
+  ne,
+  sql,
+  type SQL,
+} from 'drizzle-orm'
 
-import type { PropertyStatus } from '@/domain/enums'
+import type { Channel, PropertyStatus } from '@/domain/enums'
 import {
   ListingNotFoundError,
   type AreaListingCriteria,
@@ -262,6 +275,9 @@ export class DrizzleListingRepository implements ListingReader, ListingWriter {
           status: to,
           statusChangedAt: options.statusChangedAt,
           ...(options.publishedAt ? { publishedAt: options.publishedAt } : {}),
+          ...(options.rejectionReason !== undefined
+            ? { rejectionReason: options.rejectionReason }
+            : {}),
         })
         .where(eq(properties.id, id))
         .returning()
@@ -308,6 +324,83 @@ export class DrizzleListingRepository implements ListingReader, ListingWriter {
     return rows.map(mapRowToListing)
   }
 
+  async listPendingReview(
+    options?: ListListingsOptions,
+  ): Promise<ListingCursorPage<Listing>> {
+    return this.listByOldest(
+      eq(properties.status, 'pending_review'),
+      options,
+    )
+  }
+
+  async countByStatus(status: PropertyStatus): Promise<number> {
+    const [row] = await this.db
+      .select({ value: count() })
+      .from(properties)
+      .where(eq(properties.status, status))
+    return row?.value ?? 0
+  }
+
+  async countLiveByChannel(): Promise<{ sale: number; rent: number }> {
+    const rows = await this.db
+      .select({
+        channel: properties.channel,
+        value: count(),
+      })
+      .from(properties)
+      .where(inArray(properties.status, INDEXABLE_STATUSES))
+      .groupBy(properties.channel)
+
+    let sale = 0
+    let rent = 0
+    for (const row of rows) {
+      if (row.channel === 'sale') sale = row.value
+      if (row.channel === 'rent') rent = row.value
+    }
+    return { sale, rent }
+  }
+
+  async listSimilar(input: {
+    excludeId: string
+    channel: Channel
+    town: string
+    bedrooms: number
+    price: number
+    limit: number
+  }): Promise<Listing[]> {
+    const minPrice = Math.floor(input.price * 0.8)
+    const maxPrice = Math.ceil(input.price * 1.2)
+
+    const rows = await this.db
+      .select()
+      .from(properties)
+      .where(
+        and(
+          ne(properties.id, input.excludeId),
+          eq(properties.channel, input.channel),
+          eq(properties.town, input.town),
+          eq(properties.bedrooms, input.bedrooms),
+          eq(properties.status, 'published'),
+          between(properties.price, minPrice, maxPrice),
+        ),
+      )
+      .orderBy(desc(properties.publishedAt))
+      .limit(input.limit)
+
+    return rows.map(mapRowToListing)
+  }
+
+  async oldestPendingReviewAt(): Promise<Date | null> {
+    const [row] = await this.db
+      .select({
+        oldest: sql<Date | null>`min(coalesce(${properties.statusChangedAt}, ${properties.createdAt}))`,
+      })
+      .from(properties)
+      .where(eq(properties.status, 'pending_review'))
+
+    return row?.oldest ?? null
+  }
+
   private async listBy(
     predicate: SQL,
     { cursor, limit = DEFAULT_PAGE_LIMIT }: ListListingsOptions = {},
@@ -318,6 +411,24 @@ export class DrizzleListingRepository implements ListingReader, ListingWriter {
       .from(properties)
       .where(where)
       .orderBy(desc(properties.id))
+      .limit(limit + 1)
+
+    const page = rows.slice(0, limit)
+    const nextCursor = rows.length > limit ? (page.at(-1)?.id ?? null) : null
+
+    return { data: page.map(mapRowToListing), nextCursor }
+  }
+
+  private async listByOldest(
+    predicate: SQL,
+    { cursor, limit = DEFAULT_PAGE_LIMIT }: ListListingsOptions = {},
+  ): Promise<ListingCursorPage<Listing>> {
+    const where = cursor ? and(predicate, gt(properties.id, cursor)) : predicate
+    const rows = await this.db
+      .select()
+      .from(properties)
+      .where(where)
+      .orderBy(asc(properties.id))
       .limit(limit + 1)
 
     const page = rows.slice(0, limit)

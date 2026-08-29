@@ -92,6 +92,27 @@ export interface ListingReader {
     criteria: AreaListingCriteria,
     limit: number,
   ): Promise<Listing[]>
+  /** Admin approval queue (ADM-1): pending_review, oldest first. */
+  listPendingReview(
+    options?: ListListingsOptions,
+  ): Promise<ListingCursorPage<Listing>>
+  countByStatus(status: PropertyStatus): Promise<number>
+  /** Live (published + under_offer) counts split by channel — ADM-4. */
+  countLiveByChannel(): Promise<{ sale: number; rent: number }>
+  /**
+   * Similar listings for the detail page (DET-5): same channel + town +
+   * bedrooms, price within ±20%, excluding `excludeId`, published only.
+   */
+  listSimilar(input: {
+    excludeId: string
+    channel: Channel
+    town: string
+    bedrooms: number
+    price: number
+    limit: number
+  }): Promise<Listing[]>
+  /** Oldest pending_review statusChangedAt (or createdAt) — ADM-4 queue age. */
+  oldestPendingReviewAt(): Promise<Date | null>
 }
 
 export interface AreaListingCriteria {
@@ -178,6 +199,9 @@ export interface ListingTransitionOptions {
    * later transition (PRD §9.2: property_images... publishedAt null until
    * then). Omit on every other transition. */
   publishedAt?: Date
+  /** Set on admin reject (pending_review → rejected); clear (null) on
+   * approve or any other transition that leaves rejection behind. */
+  rejectionReason?: string | null
   /** `'upsert'` when `to` is publicly visible (published, under_offer);
    * `'delete'` when `to` stops being visible (hidden, completed); `null`
    * when the transition doesn't change visibility either side (e.g.

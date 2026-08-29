@@ -13,9 +13,22 @@ export interface User {
   firebaseUid: string
   email: string
   displayName: string
+  phone: string | null
   role: UserRole
   agencyId: string | null
   status: UserStatus
+}
+
+export interface UserSearchOptions {
+  /** Case-insensitive substring match on displayName or email. */
+  q?: string
+  cursor?: string | null
+  limit?: number
+}
+
+export interface UserCursorPage {
+  data: User[]
+  nextCursor: string | null
 }
 
 export interface UserRepository {
@@ -30,6 +43,11 @@ export interface UserRepository {
    */
   create(user: Omit<User, 'id'>): Promise<User>
   update(id: string, changes: Partial<Omit<User, 'id'>>): Promise<User>
+  /** Admin user search (ADM-3). */
+  search(options?: UserSearchOptions): Promise<UserCursorPage>
+  countCreatedSince(since: Date): Promise<number>
+  /** Hard-delete the app profile row after Firebase Auth deletion (ACC-3). */
+  delete(id: string): Promise<void>
 }
 
 /**

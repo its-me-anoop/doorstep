@@ -451,3 +451,35 @@ export const events = pgTable('events', {
     .notNull()
     .defaultNow(),
 })
+
+// ---------------------------------------------------------------------------
+// reports (ADM-2 user-submitted listing reports)
+// ---------------------------------------------------------------------------
+
+export const reportStatusEnum = pgEnum('report_status', [
+  'open',
+  'resolved',
+  'dismissed',
+])
+
+export const reports = pgTable(
+  'reports',
+  {
+    id: idColumn(),
+    propertyId: uuid('property_id')
+      .notNull()
+      .references(() => properties.id),
+    reporterId: uuid('reporter_id').references(() => users.id),
+    reporterEmail: text('reporter_email'),
+    reason: text('reason').notNull(),
+    details: text('details'),
+    status: reportStatusEnum('status').notNull().default('open'),
+    resolvedBy: uuid('resolved_by').references(() => users.id),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    index('reports_property_id_idx').on(t.propertyId),
+    index('reports_status_idx').on(t.status),
+  ],
+)

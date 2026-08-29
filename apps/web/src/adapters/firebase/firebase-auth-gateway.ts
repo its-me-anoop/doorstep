@@ -105,4 +105,8 @@ export class FirebaseAuthGateway implements AuthGateway {
   async setRoleClaims(uid: string, claims: RoleClaims): Promise<void> {
     await (await adminAuth()).setCustomUserClaims(uid, claims)
   }
+
+  async deleteUser(uid: string): Promise<void> {
+    await (await adminAuth()).deleteUser(uid)
+  }
 }
