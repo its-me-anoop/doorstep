@@ -22,6 +22,7 @@ import { useIsDesktop } from '@/components/features/search/map/use-is-desktop'
 import { OutagePanel } from '@/components/features/search/outage-panel'
 import { Pagination } from '@/components/features/search/pagination'
 import { ResultCard } from '@/components/features/search/result-card'
+import { SaveSearchButton } from '@/components/features/saved/save-search-button'
 import { SortSelect } from '@/components/features/search/sort-select'
 import { isMapFeatureEnabled } from '@/lib/feature-flags'
 import {
@@ -431,7 +432,12 @@ export function ResultsView({
               </span>
             )}
           </p>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <SaveSearchButton
+              channel={channel}
+              state={state}
+              signedIn={signedIn}
+            />
             {mapFeatureEnabled && isDesktop && (
               <MapViewToggleButton
                 isMapView={isMapView}

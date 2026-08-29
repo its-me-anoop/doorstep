@@ -19,9 +19,9 @@ This repository has completed **M1 — Listing CRUD + images**,
 status](#delivery-status) below): account/auth, lister onboarding, the
 create-listing wizard, the image pipeline, the my-listings dashboard, the
 Meilisearch-backed search API, results UI, area landing pages, the public
-listing detail page and the clustered map view are all built and tested.
-Favourites/saved searches, enquiries, admin and email are not built yet —
-don't go looking for them.
+listing detail page, the clustered map view, favourites and saved searches,
+enquiries, admin moderation, and launch hardening (legal pages, SEO, DSAR)
+are all built and tested.
 
 ## Delivery status
 
@@ -190,7 +190,45 @@ m3.smoke.spec.ts` (CI, no live stack) proves the map shell never crashes
     single-property map slot (the M3 design spec's own closing appendix)
     is not built this milestone; the `MediaPlaceholder` on `/property/
 {slug}` is unchanged. Tracked as a follow-up, not silently dropped.
-- **M4 (Engagement) through M6 (hardening + launch)** — not started.
+- **M4 — Engagement.** Done. Signed-in buyers can save properties and
+  named searches; guests and signed-in users can enquire on live listings
+  with abuse controls:
+  - **Favourites** — `SaveHeartButton` on result cards and the detail page;
+    `PUT`/`DELETE /api/v1/me/saved-properties/{propertyId}`; `/account/
+    favourites` lists saved homes with unsave.
+  - **Saved searches** — `SaveSearchButton` on the results shell maps
+    `SearchUrlState` to `SavedSearchCriteria` and `POST /api/v1/me/saved-
+    searches`; `/account/saved-searches` lists and deletes named filters.
+  - **Enquiries** — `EnquiryForm` on the detail lister card with
+    Cloudflare Turnstile (`adapters/turnstile/`), Upstash/in-memory rate
+    limits (`adapters/upstash/`), and Resend/console mailer delivery
+    (`adapters/resend/`); lister inbox at `/lister/enquiries`.
+  - **Account** — profile edit and GDPR delete account (`DELETE /api/v1/
+    me`, `DeleteAccount` service).
+  - **Detail polish** — cover gallery, enquiry CTA, public location map
+    (OpenStreetMap embed, DET-3).
+- **M5 — Admin.** Done. Internal team moderates listings and users behind
+  the `(admin)` route group:
+  - **Moderation queue** — pending listings, approve/reject with emails
+    and audit log entries (`DecideListing`, `GET /api/v1/admin/queue`).
+  - **Reports** — public report link on listings; admin resolve flow.
+  - **Users & agencies** — search, suspend, verify agencies.
+  - **Metrics & audit** — dashboard counts, `audit_log` append-only trail.
+  - **Analytics** — `POST /api/v1/events` for client events (phone reveal,
+    etc.).
+  - **Retention** — `GET /api/cron/retention` anonymises stale enquiries.
+- **M6 — Hardening + beta launch.** Done (code). Launch ops remain manual
+  (see [`docs/LAUNCH-CHECKLIST.md`](docs/LAUNCH-CHECKLIST.md)):
+  - **SEO** — dynamic `sitemap.ts`, `robots.ts`, JSON-LD on `/property/
+    {slug}`, per-listing OG images.
+  - **Legal / GDPR** — `/privacy`, `/terms`, `/cookies`, `/complaints`;
+    cookie consent banner; DSAR export/erase scripts (`pnpm dsar:export`,
+    `pnpm dsar:erase`) and [`docs/runbooks/DSAR.md`](docs/runbooks/DSAR.md).
+  - **Security** — OWASP ASVS L1 self-assessment
+    ([`docs/security/OWASP-ASVS-L1.md`](docs/security/OWASP-ASVS-L1.md)).
+  - **Operations** — search outage runbook
+    ([`docs/runbooks/INCIDENT-SEARCH-OUTAGE.md`](docs/runbooks/INCIDENT-
+    SEARCH-OUTAGE.md)); e2e axe smoke on legal pages (`m4.smoke.spec.ts`).
 
 ## Stack
 
@@ -205,8 +243,8 @@ m3.smoke.spec.ts` (CI, no live stack) proves the map shell never crashes
 | Search           | Meilisearch Cloud, EU region — wired M2: index + settings, transactional-outbox sync, nightly reindex, public search API (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and ADR-0003/0005/0008)                                            |
 | File storage     | Firebase Storage, behind an `ImageStorage` port (wired M1: signed uploads, sharp variants, EXIF strip, blurhash, download-token URLs)                                                                                                           |
 | Maps + geocoding | postcodes.io UK postcode fast-path (wired M1) and free-text place search (wired M2, `GET /api/v1/geocode?q=`) — Mapbox when `MAPBOX_ACCESS_TOKEN` is set, else postcodes.io's own Places API (ADR-0007). Map view (wired M3): MapLibre GL JS + OpenFreeMap tiles by default, Mapbox GL JS when `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` is set, behind the same `MapAdapter` component boundary (ADR-0009) |
-| Email            | Resend + React Email (wired from M4, or earlier for auth emails)                                                                                                                                                                                |
-| Rate limiting    | Upstash Redis (wired from M4)                                                                                                                                                                                                                   |
+| Email            | Resend + React Email (wired M4: enquiry/admin emails; `ConsoleMailer` fallback when `RESEND_API_KEY` unset)                                                                                                                                       |
+| Rate limiting    | Upstash Redis (wired M4: enquiry spam controls; `InMemoryRateLimiter` fallback when Upstash env unset)                                                                                                                                           |
 | Testing          | Vitest 4 (node + integration + jsdom projects) + Playwright + axe                                                                                                                                                                               |
 
 Full rationale for each choice: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)

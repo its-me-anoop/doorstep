@@ -210,7 +210,11 @@ export default async function PropertyDetailPage({
         features={listing.features}
       />
 
-      <LocationSection displayAddress={listing.displayAddress} />
+      <LocationSection
+        displayAddress={listing.displayAddress}
+        geo={listing.geo}
+        locationApproximate={listing.locationApproximate}
+      />
 
       <ListerCard
         propertyId={listing.id}
