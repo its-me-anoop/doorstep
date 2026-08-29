@@ -56,7 +56,7 @@ export function CookieConsentBanner() {
         preferences. We do not use analytics cookies until you accept. See our{' '}
         <Link
           href="/cookies"
-          className="text-primary underline-offset-2 hover:underline"
+          className="text-primary underline underline-offset-2"
         >
           cookie policy
         </Link>
