@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { CURATED_AREAS, matchCuratedArea } from '@/lib/curated-areas'
+import {
+  CURATED_AREAS,
+  matchCuratedArea,
+  matchCuratedAreasForQuery,
+} from '@/lib/curated-areas'
 
 describe('CURATED_AREAS typeahead', () => {
   it('includes Liverpool as an area slug, so a Liverpool query does not fall through to Reading', () => {
@@ -18,5 +22,14 @@ describe('CURATED_AREAS typeahead', () => {
   it('still exact-matches Reading independently of Liverpool', () => {
     expect(matchCuratedArea('Reading')?.slug).toBe('reading')
     expect(matchCuratedArea('Liverpool, England')).toBeUndefined()
+  })
+
+  it('surfaces Liverpool as an Area candidate for a Liverpool typeahead query', () => {
+    expect(
+      matchCuratedAreasForQuery('Liverpool').map((area) => area.slug),
+    ).toEqual(['liverpool'])
+    expect(matchCuratedAreasForQuery('liv').map((area) => area.slug)).toEqual([
+      'liverpool',
+    ])
   })
 })

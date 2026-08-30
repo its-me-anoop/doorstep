@@ -8,6 +8,7 @@
 import type { Channel } from '@/domain/enums'
 import { matchCuratedArea } from '@/lib/curated-areas'
 import { buildSearchHref, type SearchUrlState } from '@/lib/search-url'
+import type { TypeaheadSuggestion } from '@/lib/typeahead-suggestions'
 import type { GeocodeSuggestion } from '@/services/geocoding/search-geocode'
 
 /** Postcode fast-path results are precise; place-name results are
@@ -22,9 +23,13 @@ function channelPrefix(channel: Channel): string {
 }
 
 export function hrefForGeocodeSuggestion(
-  suggestion: GeocodeSuggestion,
+  suggestion: TypeaheadSuggestion,
   channel: Channel,
 ): string {
+  if (suggestion.kind === 'area') {
+    return `${channelPrefix(channel)}/${suggestion.slug}`
+  }
+
   const matchText =
     suggestion.kind === 'place' ? suggestion.name : suggestion.label
   const area = matchCuratedArea(matchText)

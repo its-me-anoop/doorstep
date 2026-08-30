@@ -78,11 +78,13 @@ describe('SearchCombobox', () => {
     await tick(250)
 
     const options = screen.getAllByRole('option')
-    expect(options).toHaveLength(2)
-    expect(options[0]).toHaveTextContent('RG1 8BT')
-    expect(options[0]).toHaveTextContent('Postcode')
-    expect(options[1]).toHaveTextContent('Reading town centre')
-    expect(options[1]).toHaveTextContent('Place')
+    expect(options).toHaveLength(3)
+    expect(options[0]).toHaveTextContent('Reading')
+    expect(options[0]).toHaveTextContent('Area')
+    expect(options[1]).toHaveTextContent('RG1 8BT')
+    expect(options[1]).toHaveTextContent('Postcode')
+    expect(options[2]).toHaveTextContent('Reading town centre')
+    expect(options[2]).toHaveTextContent('Place')
   })
 
   it('shows the friendly unrecognised-input state for zero results, not an error', async () => {
@@ -123,10 +125,13 @@ describe('SearchCombobox', () => {
     await tick(250)
 
     const options = screen.getAllByRole('option')
+    expect(options).toHaveLength(3)
     fireEvent.keyDown(input, { key: 'ArrowDown' })
     expect(input).toHaveAttribute('aria-activedescendant', options[0].id)
     fireEvent.keyDown(input, { key: 'ArrowDown' })
     expect(input).toHaveAttribute('aria-activedescendant', options[1].id)
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    expect(input).toHaveAttribute('aria-activedescendant', options[2].id)
     fireEvent.keyDown(input, { key: 'ArrowDown' })
     expect(input).toHaveAttribute('aria-activedescendant', options[0].id)
   })
@@ -211,6 +216,35 @@ describe('SearchCombobox', () => {
     expect(pushMock).toHaveBeenCalledWith(
       expect.stringContaining('/for-sale/search?'),
     )
+  })
+
+  it('shows Liverpool as a curated Area row, keeping the geocoder Place', async () => {
+    geocodeSearchMock.mockResolvedValue([
+      {
+        kind: 'place',
+        name: 'Liverpool',
+        label: 'Liverpool, North West, England',
+        lat: 53.4084,
+        lng: -2.9916,
+        outcode: null,
+      },
+    ])
+    render(<SearchCombobox channel="sale" />)
+    fireEvent.change(screen.getByRole('combobox'), {
+      target: { value: 'Liverpool' },
+    })
+    await tick(250)
+
+    const options = screen.getAllByRole('option')
+    expect(options).toHaveLength(2)
+    expect(options[0]).toHaveTextContent('Liverpool')
+    expect(options[0]).toHaveTextContent('Area')
+    expect(options[0]).not.toHaveTextContent('Place')
+    expect(options[1]).toHaveTextContent('Liverpool, North West, England')
+    expect(options[1]).toHaveTextContent('Place')
+
+    fireEvent.click(options[0])
+    expect(pushMock).toHaveBeenCalledWith('/for-sale/liverpool')
   })
 
   it('navigates with the /to-rent prefix when channel is rent', async () => {

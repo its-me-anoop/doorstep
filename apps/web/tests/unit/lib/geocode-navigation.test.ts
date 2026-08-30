@@ -67,6 +67,21 @@ describe('hrefForGeocodeSuggestion', () => {
     expect(href).toBe('/to-rent/wokingham')
   })
 
+  it('routes an Area typeahead row to the curated area page', () => {
+    expect(
+      hrefForGeocodeSuggestion(
+        { kind: 'area', slug: 'liverpool', label: 'Liverpool' },
+        'sale',
+      ),
+    ).toBe('/for-sale/liverpool')
+    expect(
+      hrefForGeocodeSuggestion(
+        { kind: 'area', slug: 'liverpool', label: 'Liverpool' },
+        'rent',
+      ),
+    ).toBe('/to-rent/liverpool')
+  })
+
   it('routes a Liverpool place to the Liverpool area page, not a Reading geo-search', () => {
     const saleHref = hrefForGeocodeSuggestion(
       {
