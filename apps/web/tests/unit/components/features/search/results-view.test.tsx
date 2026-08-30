@@ -239,6 +239,7 @@ describe('ResultsView', () => {
       />,
     )
     expect(screen.getByText('Search’s taking a breather.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Map' })).toBeInTheDocument()
   })
 
   // §4 area landing pages — ResultsView is reused verbatim for

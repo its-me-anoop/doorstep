@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { milesToMetres } from '@/domain/distance'
 import type { SearchQueryInput } from '@/lib/validation/search'
@@ -271,16 +271,38 @@ describe('SearchListings', () => {
   })
 
   describe('graceful degradation', () => {
-    it('wraps a search() failure in SearchUnavailableError', async () => {
+    it('returns an empty listing page for an unrestricted first-load query when search() throws', async () => {
+      const searchIndex = new FakeSearchIndex()
+      searchIndex.search = async () => {
+        throw new Error('ECONNREFUSED')
+      }
+      const searchListings = new SearchListings(searchIndex)
+      const consoleError = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => undefined)
+
+      const result = await searchListings.execute(input())
+
+      expect(result).toEqual({
+        results: [],
+        totalCount: 0,
+        page: 1,
+        totalPages: 0,
+        facets: { propertyType: {} },
+      })
+      consoleError.mockRestore()
+    })
+
+    it('wraps a filtered search() failure in SearchUnavailableError', async () => {
       const searchIndex = new FakeSearchIndex()
       searchIndex.search = async () => {
         throw new Error('ECONNREFUSED')
       }
       const searchListings = new SearchListings(searchIndex)
 
-      await expect(searchListings.execute(input())).rejects.toThrow(
-        SearchUnavailableError,
-      )
+      await expect(
+        searchListings.execute(input({ town: 'Reading' })),
+      ).rejects.toThrow(SearchUnavailableError)
     })
   })
 })

@@ -17,12 +17,10 @@ import { SearchCombobox } from '@/components/features/search/search-combobox'
  * header search from a rent results/detail page doesn't quietly switch
  * the visitor back to Buy.
  *
- * Below `md` the compact bar itself collapses to a single icon button
- * that expands the same combobox inline on tap (progressive disclosure,
- * not a modal/overlay) — a deliberate simplification of §2.2's "pushes
- * the wordmark row's height" full-width second-row behaviour: this
- * expands within the header's existing centred slot rather than adding
- * a dynamic second row, documented as a scope trim for this milestone.
+ * Below `md` the compact bar collapses to a 44px icon. Expanding it
+ * renders the combobox as a full-width second header row (in document
+ * flow, via `basis-full` in the parent flex-wrap) so it pushes the
+ * page — including breadcrumbs — down instead of overlaying them.
  */
 export function HeaderSearch() {
   const pathname = usePathname()
@@ -33,32 +31,35 @@ export function HeaderSearch() {
   const channel: Channel = pathname.startsWith('/to-rent') ? 'rent' : 'sale'
 
   return (
-    <div className="flex flex-1 items-center justify-center px-2">
-      <div className="hidden w-full max-w-[360px] md:block">
-        <SearchCombobox channel={channel} size="sm" />
+    <>
+      <div className="hidden min-w-0 flex-1 justify-center px-2 md:flex">
+        <div className="w-full max-w-[360px]">
+          <SearchCombobox channel={channel} size="sm" />
+        </div>
       </div>
 
-      <div className="flex w-full items-center justify-end md:hidden">
-        <button
-          type="button"
-          aria-label="Search"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((value) => !value)}
-          className="flex size-11 items-center justify-center"
-        >
-          {expanded ? (
-            <X aria-hidden="true" className="size-5" />
-          ) : (
-            <Search aria-hidden="true" className="size-5" />
-          )}
-        </button>
-      </div>
+      <button
+        type="button"
+        aria-label="Search"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+        className="flex size-11 shrink-0 items-center justify-center md:hidden"
+      >
+        {expanded ? (
+          <X aria-hidden="true" className="size-5" />
+        ) : (
+          <Search aria-hidden="true" className="size-5" />
+        )}
+      </button>
 
       {expanded && (
-        <div className="absolute inset-x-5 top-full mt-2 md:hidden">
+        <div
+          data-testid="header-search-expanded"
+          className="basis-full md:hidden"
+        >
           <SearchCombobox channel={channel} size="sm" />
         </div>
       )}
-    </div>
+    </>
   )
 }

@@ -162,10 +162,10 @@ export function ResultsView({
   const mapFeatureEnabled = isMapFeatureEnabled()
   const isMapView = mapFeatureEnabled && state.view === 'map'
   // §2 vs §3.1: the compact `[ Map ]`/`[ List ]` toggle lives in the
-  // desktop sort/count row; mobile's entire toggle mechanism is the
-  // floating pill instead (never both at once) — a JS breakpoint check
-  // (not `hidden lg:*` alone), same reasoning as map-view.tsx's own
-  // `useIsDesktop` doc comment.
+  // desktop sort/count row; mobile uses the same toolbar slot (the
+  // primary-colored pill) so it never floats over heading or empty
+  // copy. A JS breakpoint check (not `hidden lg:*` alone), same
+  // reasoning as map-view.tsx's own `useIsDesktop` doc comment.
   const isDesktop = useIsDesktop()
 
   const [result, setResult] = useState(initialResult ?? EMPTY_RESULT)
@@ -438,12 +438,15 @@ export function ResultsView({
               state={state}
               signedIn={signedIn}
             />
-            {mapFeatureEnabled && isDesktop && (
-              <MapViewToggleButton
-                isMapView={isMapView}
-                onClick={handleToggleMapView}
-              />
-            )}
+            {mapFeatureEnabled &&
+              (isDesktop ? (
+                <MapViewToggleButton
+                  isMapView={isMapView}
+                  onClick={handleToggleMapView}
+                />
+              ) : (
+                <MobileMapTogglePill onClick={handleToggleMapView} />
+              ))}
             <SortSelect
               value={state.sort}
               onChange={(sort) => handleFilterChange({ ...state, sort })}
@@ -508,10 +511,6 @@ export function ResultsView({
               </div>
             )}
           </div>
-
-          {mapFeatureEnabled && !isDesktop && (
-            <MobileMapTogglePill onClick={handleToggleMapView} />
-          )}
         </>
       )}
 
