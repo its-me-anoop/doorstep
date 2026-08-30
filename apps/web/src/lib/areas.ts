@@ -44,6 +44,10 @@
  * gap. In practice this means Emmer Green's landing page currently shows
  * the same listings as Caversham's (all real RG4/Caversham-town rows)
  * until a finer-grained locality field exists to tell them apart.
+ *
+ * Liverpool is a later, routes-only addition: match by town (no
+ * overlapping outcode with the Thames Valley set). Empty listings are
+ * correct — do not invent or seed Liverpool rows to fill the page.
  */
 
 export interface AreaMatch {
@@ -131,6 +135,15 @@ export const AREAS: readonly AreaDefinition[] = [
     radiusMiles: 3,
     intro:
       'Wokingham is its own market town, not a Reading suburb — expect a different price band and a genuinely separate high street, ten minutes down the line.',
+  },
+  {
+    slug: 'liverpool',
+    label: 'Liverpool',
+    match: { town: 'Liverpool' },
+    centre: { lat: 53.4084, lng: -2.9916 },
+    radiusMiles: 3,
+    intro:
+      "Liverpool's city centre puts the station and the waterfront within a short walk of most streets on this list — Allerton, further south, is the one neighbourhood this page is ready to name.",
   },
 ]
 
