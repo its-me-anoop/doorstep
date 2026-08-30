@@ -58,7 +58,7 @@ export async function SiteHeader() {
             <>
               <Link
                 href="/sign-in"
-                className="text-foreground hover:text-primary text-sm font-medium whitespace-nowrap"
+                className="text-foreground hover:text-primary inline-flex h-11 min-w-11 items-center justify-center text-sm font-medium whitespace-nowrap"
               >
                 Sign in
               </Link>

@@ -21,6 +21,8 @@ describe('SiteHeader', () => {
 
     const signIn = screen.getByRole('link', { name: 'Sign in' })
     expect(signIn.className).toContain('whitespace-nowrap')
+    expect(signIn.className).toContain('h-11')
+    expect(signIn.className).toContain('min-w-11')
     expect(
       screen.getByRole('button', { name: 'Get early access' }),
     ).toBeInTheDocument()
