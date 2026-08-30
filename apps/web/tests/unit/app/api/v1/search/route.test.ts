@@ -96,11 +96,28 @@ describe('GET /api/v1/search', () => {
     )
   })
 
-  it('maps SearchUnavailableError to 503 search_unavailable', async () => {
+  it('returns an empty 200 listing page for an unrestricted first-load query when search is unavailable', async () => {
     searchListings.execute.mockRejectedValue(new SearchUnavailableError())
     const { GET } = await import('@/app/api/v1/search/route')
 
     const response = await GET(getRequest('?channel=sale'))
+
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.data).toEqual({
+      results: [],
+      totalCount: 0,
+      page: 1,
+      totalPages: 0,
+      facets: { propertyType: {} },
+    })
+  })
+
+  it('maps SearchUnavailableError to 503 search_unavailable on a filtered query', async () => {
+    searchListings.execute.mockRejectedValue(new SearchUnavailableError())
+    const { GET } = await import('@/app/api/v1/search/route')
+
+    const response = await GET(getRequest('?channel=sale&town=Reading'))
 
     expect(response.status).toBe(503)
     const body = await response.json()

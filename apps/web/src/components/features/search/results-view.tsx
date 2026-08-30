@@ -79,10 +79,11 @@ interface ResultsViewProps {
   basePath: string
   tier: SearchHeadingTier
   /** The server-rendered first page's real results (SSR, PRD §8.3) —
-   * painted immediately, no extra client fetch on mount. `null` when the
-   * SSR fetch itself hit the search_unavailable outage (§1.10 point 4) —
-   * the outage panel then renders from first paint, same as a
-   * client-side re-query failure. */
+   * painted immediately, no extra client fetch on mount. `null` is
+   * treated as an empty listing page (the genuine empty-listings
+   * state), not the outage panel — first load of an empty or
+   * unconfigured index must not require Try again. The outage panel
+   * is reserved for a later client re-query that actually 503s. */
   initialResult: PublicSearchResult | null
   /** The unfiltered-for-this-tier URL, for the empty state's link. */
   unfilteredHref: string
@@ -169,7 +170,7 @@ export function ResultsView({
   const isDesktop = useIsDesktop()
 
   const [result, setResult] = useState(initialResult ?? EMPTY_RESULT)
-  const [outage, setOutage] = useState(initialResult === null)
+  const [outage, setOutage] = useState(false)
   const [isFetching, setIsFetching] = useState(false)
   // §1.3's own separate, larger map-only fetch — see `loadMapHits`'s doc
   // comment below. `null` (not `[]`) until the first response arrives:

@@ -227,7 +227,7 @@ describe('ResultsView', () => {
     expect(screen.getByRole('button', { name: 'Price' })).toBeInTheDocument()
   })
 
-  it('renders the outage panel from first paint when the SSR fetch itself failed (initialResult null)', () => {
+  it('renders the genuine empty-listings state when SSR has no hits (initialResult null)', () => {
     render(
       <ResultsView
         channel="sale"
@@ -238,7 +238,12 @@ describe('ResultsView', () => {
         now={1000}
       />,
     )
-    expect(screen.getByText('Search’s taking a breather.')).toBeInTheDocument()
+    expect(
+      screen.getByText('Nothing matches those filters yet.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Search’s taking a breather.'),
+    ).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Map' })).toBeInTheDocument()
   })
 

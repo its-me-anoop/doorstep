@@ -208,19 +208,38 @@ export function toPublicHit(document: ListingSearchDocument): PublicSearchHit {
   }
 }
 
-function isUnrestrictedQuery(query: SearchQuery): boolean {
+/** Channel + sort/page only — `/for-sale` and `/to-rent` first load. */
+export function isUnrestrictedSearchInput(input: SearchQueryInput): boolean {
   return (
-    query.geo === undefined &&
-    (query.filters === undefined || Object.keys(query.filters).length === 0)
+    input.lat === undefined &&
+    input.lng === undefined &&
+    input.bboxNeLat === undefined &&
+    input.bboxNeLng === undefined &&
+    input.bboxSwLat === undefined &&
+    input.bboxSwLng === undefined &&
+    input.priceMin === undefined &&
+    input.priceMax === undefined &&
+    input.bedsMin === undefined &&
+    input.bedsMax === undefined &&
+    input.bathsMin === undefined &&
+    (input.types === undefined || input.types.length === 0) &&
+    input.tenure === undefined &&
+    input.furnished === undefined &&
+    input.availableBy === undefined &&
+    input.newHome === undefined &&
+    input.town === undefined &&
+    input.outcode === undefined
   )
 }
 
-const EMPTY_RESULT: PublicSearchResult = {
-  results: [],
-  totalCount: 0,
-  page: 1,
-  totalPages: 0,
-  facets: { propertyType: {} },
+export function emptySearchResult(page = 1): PublicSearchResult {
+  return {
+    results: [],
+    totalCount: 0,
+    page,
+    totalPages: 0,
+    facets: { propertyType: {} },
+  }
 }
 
 export class SearchListings {
@@ -239,12 +258,12 @@ export class SearchListings {
       // throws here, returning an empty listing page is the honest
       // first-load state — 503 search_unavailable is reserved for
       // filtered/geo queries that genuinely cannot run.
-      if (isUnrestrictedQuery(query)) {
+      if (isUnrestrictedSearchInput(input)) {
         console.error(
           'SearchListings: unrestricted search failed; returning empty listings',
           error,
         )
-        return { ...EMPTY_RESULT, page: query.page }
+        return emptySearchResult(query.page)
       }
       throw new SearchUnavailableError(error)
     }
