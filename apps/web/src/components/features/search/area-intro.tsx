@@ -74,7 +74,7 @@ export function AreaIntro({
 
       <a
         href="#listings"
-        className="text-primary w-fit text-sm underline-offset-2 hover:underline"
+        className="text-primary w-fit text-sm underline underline-offset-2"
       >
         Browse all {totalCount} homes {CHANNEL_COPY[channel]} {area.label} ↓
       </a>

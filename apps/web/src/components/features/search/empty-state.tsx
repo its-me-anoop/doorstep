@@ -38,7 +38,7 @@ export function EmptyState({
         Try widening your price range or removing a filter above — or{' '}
         <Link
           href={unfilteredHref}
-          className="text-primary underline-offset-2 hover:underline"
+          className="text-primary underline underline-offset-2"
         >
           see all homes {CHANNEL_COPY[channel]} {areaLabel}
         </Link>{' '}
