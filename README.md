@@ -309,7 +309,7 @@ cp .env.example .env.local
 # Setup (manual accounts) if you don't have Firebase/Neon projects yet.
 
 pnpm db:migrate   # applies migrations, including PostGIS + citext (0000)
-pnpm seed         # inserts ~20 realistic Reading/Thames Valley listings
+pnpm seed         # inserts ~23 Reading/Thames Valley listings + M4/M5 fixtures
 pnpm dev          # http://localhost:3000
 ```
 
@@ -491,9 +491,9 @@ Run from the repo root (each proxies to `apps/web` via pnpm workspaces):
 | `pnpm test:e2e`             | Playwright (`tests/e2e`)                                                                                                                                                    |
 | `pnpm db:generate`          | `drizzle-kit generate` — writes a new migration from schema changes                                                                                                         |
 | `pnpm db:migrate`           | `drizzle-kit migrate` — applies pending migrations                                                                                                                          |
-| `pnpm seed`                 | Runs `apps/web/scripts/seed.ts` — idempotent, inserts ~20 fixture listings                                                                                                  |
+| `pnpm seed`                 | Runs `apps/web/scripts/seed.ts` — idempotent; ~23 listings, admin user, enquiries, favourites, saved searches, reports                                                                                                  |
 | `pnpm seed:search-5k`       | Inserts and indexes 5,000 synthetic listings (`apps/web/scripts/seed-search-5k.ts`) — PRD §13's M2 bench-evidence exit criterion. See [Search](#search) below               |
-| `pnpm seed:search-5k:clean` | Removes the bench-generated rows from both Postgres and Meilisearch, leaving the ~20 fixture listings untouched                                                             |
+| `pnpm seed:search-5k:clean` | Removes the bench-generated rows from both Postgres and Meilisearch, leaving the ~23 fixture listings untouched                                                             |
 | `pnpm bench:search`         | Fires 300 mixed `GET /api/v1/search` requests against a running server and prints p50/p75/p95/p99 latency (`apps/web/scripts/search-bench.ts`). See [Search](#search) below |
 | `pnpm emulator:storage`     | Starts the Firebase Storage emulator on port 9199 — see [Firebase Storage emulator](#firebase-storage-emulator-no-live-bucket-needed)                                       |
 
@@ -502,9 +502,9 @@ A few scripts aren't proxied at the root and need `pnpm --filter web run <name>`
 | Script                      | What it does                                                                                                                                                                                                                                                                                                                                                     |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `start`                     | `next start` — serves the production build (run `pnpm build` first)                                                                                                                                                                                                                                                                                              |
-| `seed:assert`               | Asserts the seed produced exactly 20 properties (used by CI after seeding twice, to prove idempotency)                                                                                                                                                                                                                                                           |
-| `reindex:local`             | Runs `RebuildSearchIndex` locally against `DATABASE_URL`/`MEILISEARCH_HOST` — the same use case `GET /api/cron/reindex` calls, without needing a signed cron request. See [Search](#search) below for the Storage-emulator dependency this has when the ~20 fixture listings have images                                                                         |
-| `backfill:storage-emulator` | Uploads a tiny real image to every variant path the ~20 fixture listings' `property_images` rows expect, against the Firebase Storage emulator — closes the gap `seed.ts` leaves (it inserts `property_images` rows directly, never runs a real upload), so `reindex:local` and the public detail page can resolve real image URLs locally without a live bucket |
+| `seed:assert`               | Asserts the seed produced exactly 23 properties (used by CI after seeding twice, to prove idempotency)                                                                                                                                                                                                                                                           |
+| `reindex:local`             | Runs `RebuildSearchIndex` locally against `DATABASE_URL`/`MEILISEARCH_HOST` — the same use case `GET /api/cron/reindex` calls, without needing a signed cron request. See [Search](#search) below for the Storage-emulator dependency this has when the ~23 fixture listings have images                                                                         |
+| `backfill:storage-emulator` | Uploads a tiny real image to every variant path the ~23 fixture listings' `property_images` rows expect, against the Firebase Storage emulator — closes the gap `seed.ts` leaves (it inserts `property_images` rows directly, never runs a real upload), so `reindex:local` and the public detail page can resolve real image URLs locally without a live bucket |
 
 ## Search
 
@@ -543,9 +543,9 @@ M2 sections; the free-text place-search provider choice:
    - `pnpm seed:search-5k` — inserts and indexes 5,000 synthetic,
      image-less listings directly (bypassing `ImageStorage` entirely), the
      fastest way to get real, non-trivial search results locally. `pnpm
-seed:search-5k:clean` removes them again without touching the ~20
+seed:search-5k:clean` removes them again without touching the ~23
      fixture listings.
-   - `pnpm --filter web reindex:local` — indexes the ~20 realistic fixture
+   - `pnpm --filter web reindex:local` — indexes the ~23 realistic fixture
      listings instead, by running the same `RebuildSearchIndex` use case
      `GET /api/cron/reindex` calls. This one has a real dependency worth
      knowing about: several fixture listings have photos, and indexing

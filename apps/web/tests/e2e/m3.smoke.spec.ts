@@ -141,14 +141,18 @@ test.describe('map view shell — no live search index (PRD §7.6 applied to the
     // content instead.
     await expect(page.getByTestId('map-view')).toBeAttached()
 
-    // Mobile has no list column — the same outage copy renders as an
-    // overlay card on top of the map instead (§1.8).
-    await expect(
-      page.getByRole('heading', {
-        level: 2,
-        name: /Search.s taking a breather\./,
-      }),
-    ).toBeVisible()
+    // Mobile has no list column — empty/outage copy renders as an
+    // overlay card on top of the map instead (§1.8). Same empty-vs-
+    // outage acceptance as the desktop case above.
+    const outage = page.getByRole('heading', {
+      level: 2,
+      name: /Search.s taking a breather\./,
+    })
+    const empty = page.getByRole('heading', {
+      level: 2,
+      name: /Nothing (matches those filters yet|in view right now)\./,
+    })
+    await expect(outage.or(empty)).toBeVisible()
 
     const canvas = page.locator('.map-canvas-container canvas')
     const tilesFailedHeading = page.getByRole('heading', {
@@ -267,10 +271,17 @@ test.describe('accessibility — map view shell (M3)', () => {
     // the `.toBeAttached()` doc comment above for why that root's box
     // collapses to zero height on a narrow viewport regardless.
     await expect(
-      page.getByRole('heading', {
-        level: 2,
-        name: /Search.s taking a breather\./,
-      }),
+      page
+        .getByRole('heading', {
+          level: 2,
+          name: /Search.s taking a breather\./,
+        })
+        .or(
+          page.getByRole('heading', {
+            level: 2,
+            name: /Nothing (matches those filters yet|in view right now)\./,
+          }),
+        ),
     ).toBeVisible()
 
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze()

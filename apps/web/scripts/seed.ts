@@ -2,7 +2,8 @@
  * Local-dev seed script (PRD M0 exit criterion: "seed script"). Inserts the
  * fixed set of realistic Reading/Thames Valley listings from
  * scripts/seed-data.ts so there is something to look at when developing
- * locally.
+ * locally — plus M4/M5 engagement fixtures (enquiries, favourites, saved
+ * searches, reports) and an admin user for moderation testing.
  *
  * Idempotent: every run first deletes any existing rows carrying the known
  * seed slugs/firebase_uids, then re-inserts from the fixtures, all inside
@@ -28,7 +29,11 @@ import type { Db } from '@/adapters/drizzle'
 
 import {
   SEED_AGENCIES,
+  SEED_ENQUIRIES,
   SEED_PROPERTIES,
+  SEED_REPORTS,
+  SEED_SAVED_PROPERTIES,
+  SEED_SAVED_SEARCHES,
   SEED_USERS,
   type SeedAgency,
   type SeedProperty,
@@ -36,7 +41,16 @@ import {
   type SeedUser,
 } from './seed-data'
 
-const { agencies, users, properties, propertyImages } = schema
+const {
+  agencies,
+  users,
+  properties,
+  propertyImages,
+  enquiries,
+  savedProperties,
+  savedSearches,
+  reports,
+} = schema
 
 /** The transaction handle `db.transaction()` hands its callback — distinct
  * from `Db` itself in Drizzle's typings, extracted here so the delete/insert
@@ -78,9 +92,6 @@ function toUserInsertValues(user: SeedUser): typeof users.$inferInsert {
     displayName: user.displayName,
     phone: user.phone,
     role: user.role,
-    // Set in a follow-up UPDATE once the agency row exists (see main()) —
-    // agencies.created_by requires the user to exist first.
-    agencyId: null,
     status: user.status,
   }
 }
@@ -110,13 +121,13 @@ function toPropertyInsertValues(
     ? new Date(property.publishedAt)
     : null
   return {
+    slug: property.slug,
     listerId,
     agencyId,
     channel: property.channel,
     status: property.status,
     propertyType: property.propertyType,
     title: property.title,
-    slug: property.slug,
     description: property.description,
     features: property.features,
     bedrooms: property.bedrooms,
@@ -139,9 +150,8 @@ function toPropertyInsertValues(
     location: property.location,
     locationApproximate: property.locationApproximate,
     publishedAt,
-    // Never changed since it was first published; pending_review/draft
-    // rows have never had a status change worth recording yet.
     statusChangedAt: publishedAt,
+    rejectionReason: property.rejectionReason ?? null,
   }
 }
 
@@ -171,21 +181,49 @@ async function deleteExistingSeedRows(tx: Tx): Promise<void> {
   const agencySlugs = SEED_AGENCIES.map((a) => a.slug)
   const firebaseUids = SEED_USERS.map((u) => u.firebaseUid)
 
-  // 1. Properties first — property_images cascade automatically, and this
-  //    frees the users.lister_id / properties.agency_id references.
+  // Resolve seed property/user ids so dependent engagement rows can be
+  // cleared before the properties/users they reference are deleted.
+  const seedPropertyRows = await tx
+    .select({ id: properties.id })
+    .from(properties)
+    .where(inArray(properties.slug, propertySlugs))
+  const seedPropertyIds = seedPropertyRows.map((row) => row.id)
+
+  const seedUserRows = await tx
+    .select({ id: users.id })
+    .from(users)
+    .where(inArray(users.firebaseUid, firebaseUids))
+  const seedUserIds = seedUserRows.map((row) => row.id)
+
+  if (seedPropertyIds.length > 0) {
+    await tx.delete(reports).where(inArray(reports.propertyId, seedPropertyIds))
+    await tx
+      .delete(enquiries)
+      .where(inArray(enquiries.propertyId, seedPropertyIds))
+    await tx
+      .delete(savedProperties)
+      .where(inArray(savedProperties.propertyId, seedPropertyIds))
+  }
+  if (seedUserIds.length > 0) {
+    await tx
+      .delete(savedSearches)
+      .where(inArray(savedSearches.userId, seedUserIds))
+    await tx
+      .delete(savedProperties)
+      .where(inArray(savedProperties.userId, seedUserIds))
+  }
+
+  // 1. Properties — property_images cascade automatically.
   await tx.delete(properties).where(inArray(properties.slug, propertySlugs))
 
-  // 2. Break the users<->agencies FK cycle by nulling the edge that isn't
-  //    NOT NULL before touching either table.
+  // 2. Break the users<->agencies FK cycle.
   await tx
     .update(users)
     .set({ agencyId: null })
     .where(inArray(users.firebaseUid, firebaseUids))
 
-  // 3. Now agencies can go — no user.agency_id references them anymore.
+  // 3. Agencies, then users.
   await tx.delete(agencies).where(inArray(agencies.slug, agencySlugs))
-
-  // 4. Now users can go — no agency.created_by references them anymore.
   await tx.delete(users).where(inArray(users.firebaseUid, firebaseUids))
 }
 
@@ -194,7 +232,6 @@ async function deleteExistingSeedRows(tx: Tx): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function insertSeedRows(tx: Tx): Promise<void> {
-  // Users first, agency-less — agencies.created_by needs them to exist.
   const insertedUsers = await tx
     .insert(users)
     .values(SEED_USERS.map(toUserInsertValues))
@@ -209,7 +246,6 @@ async function insertSeedRows(tx: Tx): Promise<void> {
     return id
   }
 
-  // Agencies, referencing the users just inserted.
   const insertedAgencies = await tx
     .insert(agencies)
     .values(
@@ -229,7 +265,6 @@ async function insertSeedRows(tx: Tx): Promise<void> {
     return id
   }
 
-  // Now that agencies exist, point each agent's own user row at theirs.
   for (const user of SEED_USERS) {
     if (user.agencySlug !== null) {
       await tx
@@ -239,7 +274,6 @@ async function insertSeedRows(tx: Tx): Promise<void> {
     }
   }
 
-  // Properties, referencing both.
   const insertedProperties = await tx
     .insert(properties)
     .values(
@@ -256,20 +290,75 @@ async function insertSeedRows(tx: Tx): Promise<void> {
     insertedProperties.map((p) => [p.slug, p.id]),
   )
 
-  // Images, referencing the properties just inserted.
-  const imageRows = SEED_PROPERTIES.flatMap((property) => {
-    const propertyId = propertyIdBySlug.get(property.slug)
-    if (!propertyId) {
-      throw new Error(
-        `seed.ts: no inserted property with slug ${property.slug}`,
-      )
+  const resolvePropertyId = (slug: string): string => {
+    const id = propertyIdBySlug.get(slug)
+    if (!id) {
+      throw new Error(`seed.ts: no seeded property with slug ${slug}`)
     }
+    return id
+  }
+
+  const imageRows = SEED_PROPERTIES.flatMap((property) => {
+    const propertyId = resolvePropertyId(property.slug)
     return property.images.map((image) =>
       toImageInsertValues(image, propertyId),
     )
   })
   if (imageRows.length > 0) {
     await tx.insert(propertyImages).values(imageRows)
+  }
+
+  if (SEED_ENQUIRIES.length > 0) {
+    await tx.insert(enquiries).values(
+      SEED_ENQUIRIES.map((enquiry) => ({
+        propertyId: resolvePropertyId(enquiry.propertySlug),
+        senderId: enquiry.senderEmail
+          ? resolveUserId(enquiry.senderEmail)
+          : null,
+        name: enquiry.name,
+        email: enquiry.email,
+        phone: enquiry.phone,
+        message: enquiry.message,
+        viewingRequested: enquiry.viewingRequested,
+        status: enquiry.status,
+        deliveredAt: new Date(),
+      })),
+    )
+  }
+
+  if (SEED_SAVED_PROPERTIES.length > 0) {
+    await tx.insert(savedProperties).values(
+      SEED_SAVED_PROPERTIES.map((saved) => ({
+        userId: resolveUserId(saved.userEmail),
+        propertyId: resolvePropertyId(saved.propertySlug),
+      })),
+    )
+  }
+
+  if (SEED_SAVED_SEARCHES.length > 0) {
+    await tx.insert(savedSearches).values(
+      SEED_SAVED_SEARCHES.map((search) => ({
+        userId: resolveUserId(search.userEmail),
+        name: search.name,
+        criteria: search.criteria,
+        alertFrequency: 'none' as const,
+      })),
+    )
+  }
+
+  if (SEED_REPORTS.length > 0) {
+    await tx.insert(reports).values(
+      SEED_REPORTS.map((report) => ({
+        propertyId: resolvePropertyId(report.propertySlug),
+        reporterId: report.reporterEmail
+          ? resolveUserId(report.reporterEmail)
+          : null,
+        reporterEmail: report.reporterEmail,
+        reason: report.reason,
+        details: report.details,
+        status: report.status,
+      })),
+    )
   }
 }
 
@@ -284,8 +373,10 @@ async function main(): Promise<void> {
   })
 
   console.log(
-    `Seeded ${SEED_AGENCIES.length} agencies, ${SEED_USERS.length} users ` +
-      `and ${SEED_PROPERTIES.length} properties.`,
+    `Seeded ${SEED_AGENCIES.length} agencies, ${SEED_USERS.length} users, ` +
+      `${SEED_PROPERTIES.length} properties, ${SEED_ENQUIRIES.length} enquiries, ` +
+      `${SEED_SAVED_PROPERTIES.length} favourites, ${SEED_SAVED_SEARCHES.length} saved searches, ` +
+      `${SEED_REPORTS.length} reports.`,
   )
 }
 

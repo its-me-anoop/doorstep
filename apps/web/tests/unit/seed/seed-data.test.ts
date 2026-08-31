@@ -14,7 +14,11 @@ import {
 
 import {
   SEED_AGENCIES,
+  SEED_ENQUIRIES,
   SEED_PROPERTIES,
+  SEED_REPORTS,
+  SEED_SAVED_PROPERTIES,
+  SEED_SAVED_SEARCHES,
   SEED_USERS,
 } from '../../../scripts/seed-data'
 
@@ -35,8 +39,9 @@ const READING_BOUNDING_BOX = {
 const DECLARED_STATUS_DISTRIBUTION: Record<string, number> = {
   published: 15,
   under_offer: 3,
-  pending_review: 1,
+  pending_review: 3,
   draft: 1,
+  rejected: 1,
 }
 
 function isInSet(enumObj: { enumValues: readonly string[] }, value: unknown) {
@@ -69,10 +74,10 @@ describe('seed-data fixtures', () => {
   })
 
   describe('users', () => {
-    it('has exactly 4 users: 2 agents, 1 owner, 1 plain user', () => {
-      expect(SEED_USERS).toHaveLength(4)
+    it('has exactly 5 users: 2 agents, 1 owner, 1 plain user, 1 admin', () => {
+      expect(SEED_USERS).toHaveLength(5)
       const roles = SEED_USERS.map((u) => u.role).sort()
-      expect(roles).toEqual(['agent', 'agent', 'owner', 'user'])
+      expect(roles).toEqual(['admin', 'agent', 'agent', 'owner', 'user'])
     })
 
     it('every user has a unique firebase_uid clearly marked seed-only', () => {
@@ -97,8 +102,8 @@ describe('seed-data fixtures', () => {
   })
 
   describe('properties', () => {
-    it('has exactly 20 properties', () => {
-      expect(SEED_PROPERTIES).toHaveLength(20)
+    it('has exactly 23 properties', () => {
+      expect(SEED_PROPERTIES).toHaveLength(23)
     })
 
     it('has unique slugs', () => {
@@ -106,11 +111,11 @@ describe('seed-data fixtures', () => {
       expect(new Set(slugs).size).toBe(slugs.length)
     })
 
-    it('is a mix of 12 sale and 8 rent listings', () => {
+    it('is a mix of 14 sale and 9 rent listings', () => {
       const sale = SEED_PROPERTIES.filter((p) => p.channel === 'sale')
       const rent = SEED_PROPERTIES.filter((p) => p.channel === 'rent')
-      expect(sale).toHaveLength(12)
-      expect(rent).toHaveLength(8)
+      expect(sale).toHaveLength(14)
+      expect(rent).toHaveLength(9)
     })
 
     it('matches the declared status distribution', () => {
@@ -231,13 +236,21 @@ describe('seed-data fixtures', () => {
       }
     })
 
-    it('sets publishedAt for published/under_offer listings and not for pending_review/draft', () => {
+    it('sets publishedAt for published/under_offer listings and not for pending_review/draft/rejected', () => {
       for (const p of SEED_PROPERTIES) {
         if (p.status === 'published' || p.status === 'under_offer') {
           expect(p.publishedAt).not.toBeNull()
         } else {
           expect(p.publishedAt).toBeNull()
         }
+      }
+    })
+
+    it('rejected listings carry a rejection reason', () => {
+      const rejected = SEED_PROPERTIES.filter((p) => p.status === 'rejected')
+      expect(rejected.length).toBeGreaterThan(0)
+      for (const p of rejected) {
+        expect(p.rejectionReason?.length).toBeGreaterThan(0)
       }
     })
 
@@ -281,6 +294,51 @@ describe('seed-data fixtures', () => {
           expect(image.blurhash.length).toBeGreaterThanOrEqual(20)
           expect(image.storagePath).toMatch(/^https:\/\//)
         }
+      }
+    })
+  })
+
+  describe('engagement fixtures', () => {
+    it('wires enquiries to seeded properties and optional senders', () => {
+      expect(SEED_ENQUIRIES.length).toBeGreaterThanOrEqual(3)
+      const slugs = new Set(SEED_PROPERTIES.map((p) => p.slug))
+      const emails = new Set(SEED_USERS.map((u) => u.email))
+      for (const enquiry of SEED_ENQUIRIES) {
+        expect(slugs.has(enquiry.propertySlug)).toBe(true)
+        if (enquiry.senderEmail !== null) {
+          expect(emails.has(enquiry.senderEmail)).toBe(true)
+        }
+        expect(enquiry.message.length).toBeGreaterThan(0)
+      }
+    })
+
+    it('wires favourites and saved searches to seeded users and listings', () => {
+      expect(SEED_SAVED_PROPERTIES.length).toBeGreaterThanOrEqual(3)
+      expect(SEED_SAVED_SEARCHES.length).toBeGreaterThanOrEqual(2)
+      const slugs = new Set(SEED_PROPERTIES.map((p) => p.slug))
+      const emails = new Set(SEED_USERS.map((u) => u.email))
+      for (const saved of SEED_SAVED_PROPERTIES) {
+        expect(emails.has(saved.userEmail)).toBe(true)
+        expect(slugs.has(saved.propertySlug)).toBe(true)
+      }
+      for (const search of SEED_SAVED_SEARCHES) {
+        expect(emails.has(search.userEmail)).toBe(true)
+        expect(search.name.length).toBeGreaterThan(0)
+        expect(['sale', 'rent']).toContain(search.criteria.channel)
+      }
+    })
+
+    it('wires reports to seeded properties for the moderation queue', () => {
+      expect(SEED_REPORTS.length).toBeGreaterThanOrEqual(2)
+      const slugs = new Set(SEED_PROPERTIES.map((p) => p.slug))
+      const emails = new Set(SEED_USERS.map((u) => u.email))
+      for (const report of SEED_REPORTS) {
+        expect(slugs.has(report.propertySlug)).toBe(true)
+        if (report.reporterEmail !== null) {
+          expect(emails.has(report.reporterEmail)).toBe(true)
+        }
+        expect(report.reason.length).toBeGreaterThan(0)
+        expect(['open', 'resolved', 'dismissed']).toContain(report.status)
       }
     })
   })
