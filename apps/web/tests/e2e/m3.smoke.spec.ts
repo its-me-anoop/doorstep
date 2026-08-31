@@ -96,15 +96,16 @@ test.describe('map view shell — no live search index (PRD §7.6 applied to the
     // Pin-less by construction here (no live search index to source hits
     // from). SearchListings treats a missing MEILISEARCH_HOST as an empty
     // result set (first-load empty index), not 503 search_unavailable —
-    // so the list column shows EmptyState. Accept OutagePanel too in case
-    // a future CI env surfaces a real Meilisearch outage instead.
+    // so the desktop map split's list column shows MapEmptyMessage
+    // ("Nothing in view right now."), not list-grid EmptyState. Accept
+    // OutagePanel / list EmptyState too if CI surfaces those instead.
     const outage = page.getByRole('heading', {
       level: 2,
       name: /Search.s taking a breather\./,
     })
     const empty = page.getByRole('heading', {
       level: 2,
-      name: 'Nothing matches those filters yet.',
+      name: /Nothing (matches those filters yet|in view right now)\./,
     })
     await expect(outage.or(empty)).toBeVisible()
 

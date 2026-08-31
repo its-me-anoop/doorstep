@@ -29,21 +29,22 @@ function readIsDesktop(): boolean {
  * which one to imperatively construct.
  */
 export function useIsDesktop(): boolean {
+  // SSR / first paint: `window` is unavailable, so this starts false.
+  // The effect below syncs to the real viewport after hydration — without
+  // that sync, a desktop session stays stuck on the mobile branch forever
+  // (React reuses the server-rendered useState value and never re-runs
+  // the lazy initializer on the client).
   const [isDesktop, setIsDesktop] = useState(readIsDesktop)
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return
     const mediaQueryList = window.matchMedia(DESKTOP_MEDIA_QUERY)
+    setIsDesktop(mediaQueryList.matches)
 
     function handleChange(event: MediaQueryListEvent) {
       setIsDesktop(event.matches)
     }
 
-    // No initial `setIsDesktop(mediaQueryList.matches)` call here — the
-    // `useState(readIsDesktop)` lazy initializer above already captured
-    // the correct value as of first render; this effect only needs to
-    // *subscribe* for subsequent changes; a synchronous set here would
-    // just trigger a same-value cascading re-render.
     mediaQueryList.addEventListener('change', handleChange)
     return () => mediaQueryList.removeEventListener('change', handleChange)
   }, [])
