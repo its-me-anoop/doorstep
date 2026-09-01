@@ -50,7 +50,7 @@ export function ChannelSegmentedControl({
       role="group"
       aria-label="Buy or rent"
       className={cn(
-        'inline-flex overflow-hidden',
+        'inline-flex w-full min-w-min overflow-hidden sm:w-auto',
         bordered && 'border-input rounded-[var(--radius-md)] border',
         heightClass,
         className,
@@ -65,7 +65,7 @@ export function ChannelSegmentedControl({
             aria-pressed={active}
             onClick={() => onChange(option)}
             className={cn(
-              'flex-1 px-4 text-sm font-medium transition-colors',
+              'flex-1 px-4 text-sm font-medium whitespace-nowrap transition-colors',
               active
                 ? 'bg-primary text-primary-foreground'
                 : 'text-foreground hover:bg-muted bg-transparent',

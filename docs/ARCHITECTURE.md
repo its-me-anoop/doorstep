@@ -1,6 +1,6 @@
 # Doorstep — Architecture
 
-Status: living document, canonical as of M3 (Map view). Update
+Status: living document, canonical as of M6 (hardening + launch). Update
 it whenever a boundary, port, or infrastructure decision changes; do not let
 it drift from the code. Source of requirements: `docs/PRD.md` (referenced by
 section below).
@@ -17,13 +17,14 @@ Redis, Cloudflare Turnstile). PRD §8.1 is the canonical stack table; this
 document explains _why the code is organised the way it is_ and _how the
 pieces talk to each other_.
 
-The system diagram below adapts PRD §8.2 with M0–M3 status: email and
-rate-limiting still exist only as ports with placeholder scaffolds; image
+The system diagram below adapts PRD §8.2 with M0–M6 status: email (Resend)
+and rate limiting (Upstash) are real adapters with local fallbacks; image
 storage, geocoding (both the postcode fast path and free-text place
-search) and search (Meilisearch, the outbox drain and nightly reindex
-crons) are real as of M1/M2 — see §8 "What M0 deliberately stubs" for the
-capability-by-capability table. The map view (§18, M3) does not appear
-as its own node below: it introduces no new *server-side* integration —
+search), search (Meilisearch, the outbox drain and nightly reindex
+crons), enquiries, admin, retention, and SEO crons are wired — see §8
+"What M0 deliberately stubs" for the capability table. The map view (§18,
+M3) does not appear as its own node below: it introduces no new
+*server-side* integration —
 the browser fetches basemap tiles (OpenFreeMap by default, Mapbox GL's
 own tile CDN when configured) directly, never proxied through `N`, so
 the diagram's existing `MB` node (Mapbox's Geocoding API, an unrelated
@@ -37,12 +38,12 @@ flowchart LR
   end
   subgraph Vercel[Vercel — region lhr1]
     N[Next.js App Router\nRSC pages + /api/v1 route handlers\nsrc/proxy.ts for route gating]
-    C[Cron jobs\noutbox drain (every minute) + nightly reindex (03:00) — real as of M2\nretention, sitemaps — not built yet, land M4-M6]
+    C[Cron jobs\noutbox drain (Hobby: GH Actions 5m + daily Vercel safety net;\nPro: every-minute Vercel cron) + nightly reindex (03:00) — M2\nretention anonymisation — M5\nsitemaps via app/sitemap.ts — M6]
   end
   subgraph Data
     P[(Neon Postgres + PostGIS\nsource of truth, eu-west-2)]
     M[(Meilisearch\nsearch + geo index — real projection as of M2)]
-    R2[(Upstash Redis\nrate limits — stub adapter, lands M4)]
+    R2[(Upstash Redis\nrate limits — real M4, in-memory fallback)]
   end
   subgraph Firebase[Firebase — europe-west2]
     A[Auth]
@@ -50,7 +51,7 @@ flowchart LR
   end
   MB[Mapbox Geocoding — real when MAPBOX_ACCESS_TOKEN set, else\npostcodes.io Places fallback, ADR-0007]
   PIO[postcodes.io — real adapter as of M1 postcode fast path,\nM2 free-text place-search fallback]
-  RE[Resend email — stub adapter, lands M4]
+  RE[Resend email — real M4, console fallback]
   SEN[Sentry]
 
   W --> N
@@ -59,9 +60,9 @@ flowchart LR
   N --> A
   N --> P
   N --> M
-  N -.stub.-> R2
+  N -.real M4.-> R2
   N --> S
-  N -.stub.-> RE
+  N -.real M4.-> RE
   N --> PIO
   N -.when token set.-> MB
   N --> SEN
@@ -73,10 +74,11 @@ M0 did not stand up Mapbox, postcodes.io, Stripe or Turnstile integrations;
 M1 wired postcodes.io for the postcode fast path (§12) and Firebase Storage
 for the image pipeline (§11); M2 wired Meilisearch, the outbox drain and
 nightly reindex crons (§13–§15), the public search API (§16) and free-text
-place search plus its 30-day cache (§17); M3 wired the map view (§18) —
-client-side only, reusing M2's search API and URL-state module rather than
-adding a server integration of its own. Stripe and Turnstile still land
-in M4–M6 alongside the features that need them (PRD §13).
+place search plus its 30-day cache (§17); M3 wired the map view (§18);
+M4–M6 wired enquiries, saved data, account deletion, admin moderation,
+analytics events, retention cron, legal/SEO surfaces, and DSAR ops scripts
+— client-side map still reuses M2's search API rather than adding a server
+integration. Stripe still lands post-MVP (PRD §13).
 
 ---
 
@@ -330,9 +332,13 @@ published → under_offer → completed → archived`, with `rejected` and
   (§10) — this is no longer a not-yet-built path. As of M2, the table is
   drained for real too: `DrizzleOutboxRepository`
   (`src/adapters/drizzle/repositories/outbox-repository.ts`) claims
-  unprocessed rows and `GET /api/cron/outbox-drain` runs every minute via
-  a `crons` entry in `apps/web/vercel.json` — see §14 for the full
-  concurrency and cadence story.
+  unprocessed rows and `GET /api/cron/outbox-drain` is the drain
+  endpoint. Vercel Hobby forbids sub-daily Cron Jobs, so
+  `apps/web/vercel.json` schedules a daily safety-net drain and
+  `.github/workflows/outbox-drain.yml` pings the endpoint every 5
+  minutes when `APP_URL`/`CRON_SECRET` secrets are set. On Vercel Pro,
+  restore `* * * * *` in vercel.json for the literal 1-minute SLA —
+  see §14 for the full concurrency and cadence story.
 - **PostGIS for location.** `properties.location` is
   `geography(Point, 4326)` with a GIST index, enabling efficient
   radius/bbox queries directly in Postgres as a fallback/reconciliation
@@ -414,16 +420,18 @@ geocoding — four of the six rows below are now real.
 | ------------------------------ | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | Search (`SearchIndex`)         | Yes                                | **Real as of M2** — `adapters/meilisearch/` (index settings, upsert/delete, geo/filter/sort translation, facets). See §13                                                                                                                                                                                            | Done (M2)                                                    |
 | Image storage (`ImageStorage`) | Yes                                | **Real as of M1** — `adapters/firebase/firebase-storage-adapter.ts` (signed uploads, variant writes, download-token public URLs). See §11                                                                                                                                                                            | Done (M1)                                                    |
-| Email (`Mailer`)               | Yes                                | `adapters/resend/` is an empty scaffold (`export {}`)                                                                                                                                                                                                                                                                | M4 (enquiry emails), earlier if auth emails need it          |
-| Rate limiting (`RateLimiter`)  | Yes                                | `adapters/upstash/` is an empty scaffold (`export {}`)                                                                                                                                                                                                                                                               | M4 (enquiries), tightened per PRD §7.4 limits                |
+| Email (`Mailer`)               | Yes                                | **Real as of M4** — `adapters/resend/` (`ResendMailer` + `ConsoleMailer` fallback). Enquiry and admin decision emails                                                                                                                                                                                               | Done (M4)                                                    |
+| Rate limiting (`RateLimiter`)  | Yes                                | **Real as of M4** — `adapters/upstash/` (`UpstashRateLimiter` + `InMemoryRateLimiter` fallback). Enquiry submit + API abuse controls                                                                                                                                                                                | Done (M4)                                                    |
 | Geocoding (`Geocoder`)         | Yes                                | **Real as of M2** — `adapters/postcodesio/` resolves full/partial UK postcodes (§12) and, as the _default_ free-text place-search provider, its own keyless Places API; `adapters/mapbox/` is a real, unit-tested `Geocoder` implementation too, wired instead whenever `MAPBOX_ACCESS_TOKEN` is set (ADR-0007, §17) | Done (M1 postcode fast path; M2 place search, both branches) |
-| Outbox drain worker            | Yes (`OutboxRepository`, added M2) | **Real as of M2** — `DrizzleOutboxRepository` (`SELECT ... FOR UPDATE SKIP LOCKED` + lease), `DrainOutbox` use case, `GET /api/cron/outbox-drain` on a `* * * * *` Vercel Cron entry in `apps/web/vercel.json`. See §14                                                                                              | Done (M2)                                                    |
+| Outbox drain worker            | Yes (`OutboxRepository`, added M2) | **Real as of M2** — `DrizzleOutboxRepository` (`SELECT ... FOR UPDATE SKIP LOCKED` + lease), `DrainOutbox` use case, `GET /api/cron/outbox-drain`. Hobby: daily Vercel safety-net cron + GitHub Actions every 5 minutes; Pro: restore `* * * * *` in vercel.json. See §14 | Done (M2)                                                    |
 
 Explicitly, M0 did **not** build: the listing wizard, image pipeline, search
 API, map view, enquiries, or admin queue. M1 built the first two of those
 (§9–§12 below); M2 built the search API, results UI, area pages and public
-detail (§13–§17); M3 built the map view (§18); enquiries and admin remain
-M4–M5 (PRD §13).
+detail (§13–§17); M3 built the map view (§18); M4 built engagement
+(enquiries, favourites, saved searches, account); M5 built admin moderation,
+reports, audit log, analytics, and retention; M6 built SEO, legal pages,
+cookie consent, and DSAR/runbook pack (PRD §13).
 M0's job was the foundation those milestones build on: a correctly-bounded
 codebase, a working auth round-trip against real infrastructure, and a
 schema that already has the shape (including PostGIS, the outbox, and
@@ -740,12 +748,18 @@ succeed — if either throws, nothing in the batch is marked processed and
 the lease simply expires for a later run to retry, which is safe because
 every op here is idempotent (Meilisearch upsert/delete keyed on `id`).
 
-**Cadence vs the exit criterion.** `apps/web/vercel.json`'s
-`/api/cron/outbox-drain` entry runs `"* * * * *"` — every minute — which
-is the literal mechanism PRD §13's M2 exit criterion ("publish-to-
-searchable under 1 minute") and PRD §6.5 LST-5 ride on: a mutation
-committed at T is claimed and applied by the drain run that starts
-sometime in `(T, T+60s]`. `GET /api/cron/outbox-drain`
+**Cadence vs the exit criterion.** PRD §13's M2 exit criterion
+("publish-to-searchable under 1 minute") and PRD §6.5 LST-5 ride on
+`GET /api/cron/outbox-drain` being invoked about once a minute.
+Vercel Hobby forbids sub-daily Cron Jobs (deployment fails with that
+message if vercel.json contains `* * * * *`), so this repo ships a
+Hobby-compatible split: `apps/web/vercel.json` schedules a daily
+safety-net drain (`0 2 * * *`), and `.github/workflows/outbox-drain.yml`
+pings the same endpoint every 5 minutes when the `APP_URL` and
+`CRON_SECRET` repository secrets are set (~5-minute lag on Hobby). On
+Vercel Pro, restore `"* * * * *"` for `/api/cron/outbox-drain` in
+vercel.json for the literal 1-minute SLA; the GitHub Action then becomes
+optional redundancy. `GET /api/cron/outbox-drain`
 (`src/app/api/cron/outbox-drain/route.ts`) is a `GET` handler, not `POST`
 — Vercel Cron Jobs always invoke the configured path with `GET`, so a
 `POST`-only handler would 405 on every real trigger. Authorisation is
@@ -1109,13 +1123,10 @@ environment has no search index); `tests/e2e/m3.parity.spec.ts`
 (`RUN_LOCAL_STACK_E2E=1`) axe-scans it again against real, seeded pins,
 closing the gap the CI-safe suite structurally cannot.
 
-**Deferred:** the M2 §5.6-reserved detail-page single-property map slot
-(the M3 design spec's own closing appendix) was not built this
-milestone — `/property/{slug}`'s `location-section.tsx` still renders
-`MediaPlaceholder` at `aspect-[16/9]` unchanged. Everything the appendix
-would need (the `MapAdapter` boundary, the pin tokens, the basemap
-treatment) already exists; swapping the placeholder for a live single-pin
-map is a small, self-contained follow-up, not a design gap.
+**Detail location map (DET-3):** `/property/{slug}`'s `location-section.tsx`
+renders a lightweight OpenStreetMap iframe embed (no MapLibre/Mapbox in the
+detail bundle) with an approximate-location note when `locationApproximate`
+is set — privacy-shifted coordinates are applied server-side before render.
 
 ---
 

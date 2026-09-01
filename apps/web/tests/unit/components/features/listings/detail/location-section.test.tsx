@@ -3,22 +3,40 @@ import { describe, expect, it } from 'vitest'
 
 import { LocationSection } from '@/components/features/listings/detail/location-section'
 
-// M2-DESIGN-SPEC.md §5.6 — display address (never addressLine1) + the
-// reserved M3 map slot, reusing MediaPlaceholder verbatim.
 describe('LocationSection', () => {
+  const geo = { lat: 51.454, lng: -0.978 }
+
   it('renders the "Location." heading and the display address', () => {
-    render(<LocationSection displayAddress="Oxford Road, Reading, RG30" />)
+    render(
+      <LocationSection displayAddress="Oxford Road, Reading, RG30" geo={geo} />,
+    )
     expect(
       screen.getByRole('heading', { name: 'Location.' }),
     ).toBeInTheDocument()
     expect(screen.getByText('Oxford Road, Reading, RG30')).toBeInTheDocument()
   })
 
-  it('renders the reserved map placeholder, hidden from assistive tech', () => {
-    const { container } = render(
-      <LocationSection displayAddress="Oxford Road, Reading, RG30" />,
+  it('renders an OpenStreetMap embed iframe', () => {
+    render(
+      <LocationSection displayAddress="Oxford Road, Reading, RG30" geo={geo} />,
     )
-    const placeholder = container.querySelector('[aria-hidden="true"]')
-    expect(placeholder).not.toBeNull()
+    const iframe = screen.getByTitle('Property location map')
+    expect(iframe).toHaveAttribute(
+      'src',
+      expect.stringContaining('openstreetmap.org'),
+    )
+  })
+
+  it('notes approximate location when flagged', () => {
+    render(
+      <LocationSection
+        displayAddress="Oxford Road, Reading, RG30"
+        geo={geo}
+        locationApproximate
+      />,
+    )
+    expect(
+      screen.getByText(/approximate location for privacy/i),
+    ).toBeInTheDocument()
   })
 })

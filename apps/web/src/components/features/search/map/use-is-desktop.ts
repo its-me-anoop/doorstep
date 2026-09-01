@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 
 /** M3-DESIGN-SPEC.md §0: "≥1024px is 'desktop' throughout this spec,"
  * the same threshold M2 §1.8 already uses for its 3-column result grid
@@ -8,14 +8,27 @@ import { useEffect, useState } from 'react'
  * everywhere a JS (not just CSS `lg:`) breakpoint decision is needed. */
 const DESKTOP_MEDIA_QUERY = '(min-width: 1024px)'
 
-function readIsDesktop(): boolean {
-  if (
-    typeof window === 'undefined' ||
-    typeof window.matchMedia !== 'function'
-  ) {
-    return false
+function subscribe(onStoreChange: () => void): () => void {
+  if (typeof window.matchMedia !== 'function') {
+    return () => {}
   }
+  const mediaQueryList = window.matchMedia(DESKTOP_MEDIA_QUERY)
+  mediaQueryList.addEventListener('change', onStoreChange)
+  return () => mediaQueryList.removeEventListener('change', onStoreChange)
+}
+
+function getSnapshot(): boolean {
+  if (typeof window.matchMedia !== 'function') return false
   return window.matchMedia(DESKTOP_MEDIA_QUERY).matches
+}
+
+/** SSR / first paint before hydration: no window → treat as mobile.
+ * `useSyncExternalStore` then re-reads `getSnapshot` on the client so a
+ * desktop viewport is not stuck on the mobile branch forever (the bug
+ * the old useState+effect path had when the effect was not allowed to
+ * call setState synchronously under react-hooks/set-state-in-effect). */
+function getServerSnapshot(): boolean {
+  return false
 }
 
 /**
@@ -29,24 +42,5 @@ function readIsDesktop(): boolean {
  * which one to imperatively construct.
  */
 export function useIsDesktop(): boolean {
-  const [isDesktop, setIsDesktop] = useState(readIsDesktop)
-
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return
-    const mediaQueryList = window.matchMedia(DESKTOP_MEDIA_QUERY)
-
-    function handleChange(event: MediaQueryListEvent) {
-      setIsDesktop(event.matches)
-    }
-
-    // No initial `setIsDesktop(mediaQueryList.matches)` call here — the
-    // `useState(readIsDesktop)` lazy initializer above already captured
-    // the correct value as of first render; this effect only needs to
-    // *subscribe* for subsequent changes; a synchronous set here would
-    // just trigger a same-value cascading re-render.
-    mediaQueryList.addEventListener('change', handleChange)
-    return () => mediaQueryList.removeEventListener('change', handleChange)
-  }, [])
-
-  return isDesktop
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 }

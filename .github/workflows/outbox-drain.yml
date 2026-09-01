@@ -1,0 +1,44 @@
+name: Outbox drain
+
+# PRD §6.5 LST-5 / §8.6: search visibility within ~1 minute after a
+# visibility-relevant mutation. Vercel Hobby only allows daily Cron Jobs,
+# so the every-minute schedule cannot live in apps/web/vercel.json on the
+# current plan (deployment fails with "Hobby accounts are limited to
+# daily cron jobs"). This workflow is the Hobby-compatible driver: it
+# hits GET /api/cron/outbox-drain every 5 minutes when the repo secrets
+# below are set. On Vercel Pro, restore `"* * * * *"` for outbox-drain
+# in vercel.json and this workflow becomes optional redundancy.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   CRON_SECRET  — same value as the Vercel project's CRON_SECRET
+#   APP_URL      — production origin, e.g. https://doorstep.example.com
+#                  (no trailing slash)
+#
+# Skips cleanly when either secret is unset so forks/PRs without prod
+# credentials never fail CI.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  drain:
+    name: Drain search outbox
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/cron/outbox-drain
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ secrets.APP_URL }}
+        run: |
+          if [ -z "$CRON_SECRET" ] || [ -z "$APP_URL" ]; then
+            echo "CRON_SECRET or APP_URL unset — skipping outbox drain (expected on forks / before prod secrets)."
+            exit 0
+          fi
+          curl -fsS \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${APP_URL%/}/api/cron/outbox-drain"

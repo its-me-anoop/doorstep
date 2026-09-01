@@ -31,3 +31,17 @@ export function matchCuratedArea(text: string): CuratedArea | undefined {
   const normalised = text.trim().toLowerCase()
   return CURATED_AREAS.find((area) => area.label.toLowerCase() === normalised)
 }
+
+/** Typeahead prefix/exact match against curated labels — "Liv" and
+ * "Liverpool" both surface Liverpool as an Area row; "Liverpool, North
+ * West, England" does too (query starts with the label). Used to
+ * *inject* Area suggestions; `matchCuratedArea` stays exact-only for
+ * deciding whether a geocoder Place should navigate to an area page. */
+export function matchCuratedAreasForQuery(query: string): CuratedArea[] {
+  const normalised = query.trim().toLowerCase()
+  if (normalised.length < 2) return []
+  return CURATED_AREAS.filter((area) => {
+    const label = area.label.toLowerCase()
+    return label.startsWith(normalised) || normalised.startsWith(label)
+  })
+}

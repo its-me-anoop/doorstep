@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 
 import { fraunces, karla } from './fonts'
+import { CookieConsentBanner } from '@/components/cookie-consent-banner'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -22,7 +23,10 @@ export default function RootLayout({
       lang="en-GB"
       className={`${fraunces.variable} ${karla.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        {children}
+        <CookieConsentBanner />
+      </body>
     </html>
   )
 }

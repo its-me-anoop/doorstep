@@ -24,6 +24,25 @@ export interface AgencyRepository {
   create(
     agency: Omit<Agency, 'id' | 'createdAt' | 'updatedAt'>,
   ): Promise<Agency>
+  update(
+    id: string,
+    changes: Partial<
+      Pick<
+        Agency,
+        | 'name'
+        | 'logoPath'
+        | 'phone'
+        | 'email'
+        | 'website'
+        | 'address'
+        | 'verified'
+      >
+    >,
+  ): Promise<Agency>
+  list(options?: {
+    cursor?: string | null
+    limit?: number
+  }): Promise<{ data: Agency[]; nextCursor: string | null }>
 }
 
 /**

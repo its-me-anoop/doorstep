@@ -22,6 +22,7 @@ import { useIsDesktop } from '@/components/features/search/map/use-is-desktop'
 import { OutagePanel } from '@/components/features/search/outage-panel'
 import { Pagination } from '@/components/features/search/pagination'
 import { ResultCard } from '@/components/features/search/result-card'
+import { SaveSearchButton } from '@/components/features/saved/save-search-button'
 import { SortSelect } from '@/components/features/search/sort-select'
 import { isMapFeatureEnabled } from '@/lib/feature-flags'
 import {
@@ -78,10 +79,11 @@ interface ResultsViewProps {
   basePath: string
   tier: SearchHeadingTier
   /** The server-rendered first page's real results (SSR, PRD §8.3) —
-   * painted immediately, no extra client fetch on mount. `null` when the
-   * SSR fetch itself hit the search_unavailable outage (§1.10 point 4) —
-   * the outage panel then renders from first paint, same as a
-   * client-side re-query failure. */
+   * painted immediately, no extra client fetch on mount. `null` is
+   * treated as an empty listing page (the genuine empty-listings
+   * state), not the outage panel — first load of an empty or
+   * unconfigured index must not require Try again. The outage panel
+   * is reserved for a later client re-query that actually 503s. */
   initialResult: PublicSearchResult | null
   /** The unfiltered-for-this-tier URL, for the empty state's link. */
   unfilteredHref: string
@@ -89,6 +91,8 @@ interface ResultsViewProps {
    * grid agrees on one New-this-week instant (§1.11) and so a
    * client-side re-render doesn't quietly redraw badges mid-session. */
   now: number
+  signedIn?: boolean
+  savedPropertyIds?: string[]
   /** §4's area landing pages: the curated area's town/outcode, merged
    * into every re-query (not just the SSR initial one) so applying a
    * filter on an area page never silently drops its location scope. */
@@ -139,6 +143,8 @@ export function ResultsView({
   initialResult,
   unfilteredHref,
   now,
+  signedIn = false,
+  savedPropertyIds = [],
   areaFilter,
   areaLabel,
   areaCentre,
@@ -157,14 +163,14 @@ export function ResultsView({
   const mapFeatureEnabled = isMapFeatureEnabled()
   const isMapView = mapFeatureEnabled && state.view === 'map'
   // §2 vs §3.1: the compact `[ Map ]`/`[ List ]` toggle lives in the
-  // desktop sort/count row; mobile's entire toggle mechanism is the
-  // floating pill instead (never both at once) — a JS breakpoint check
-  // (not `hidden lg:*` alone), same reasoning as map-view.tsx's own
-  // `useIsDesktop` doc comment.
+  // desktop sort/count row; mobile uses the same toolbar slot (the
+  // primary-colored pill) so it never floats over heading or empty
+  // copy. A JS breakpoint check (not `hidden lg:*` alone), same
+  // reasoning as map-view.tsx's own `useIsDesktop` doc comment.
   const isDesktop = useIsDesktop()
 
   const [result, setResult] = useState(initialResult ?? EMPTY_RESULT)
-  const [outage, setOutage] = useState(initialResult === null)
+  const [outage, setOutage] = useState(false)
   const [isFetching, setIsFetching] = useState(false)
   // §1.3's own separate, larger map-only fetch — see `loadMapHits`'s doc
   // comment below. `null` (not `[]`) until the first response arrives:
@@ -427,13 +433,21 @@ export function ResultsView({
               </span>
             )}
           </p>
-          <div className="flex items-center gap-3">
-            {mapFeatureEnabled && isDesktop && (
-              <MapViewToggleButton
-                isMapView={isMapView}
-                onClick={handleToggleMapView}
-              />
-            )}
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <SaveSearchButton
+              channel={channel}
+              state={state}
+              signedIn={signedIn}
+            />
+            {mapFeatureEnabled &&
+              (isDesktop ? (
+                <MapViewToggleButton
+                  isMapView={isMapView}
+                  onClick={handleToggleMapView}
+                />
+              ) : (
+                <MobileMapTogglePill onClick={handleToggleMapView} />
+              ))}
             <SortSelect
               value={state.sort}
               onChange={(sort) => handleFilterChange({ ...state, sort })}
@@ -455,6 +469,8 @@ export function ResultsView({
               buildSearchHref(basePath, { ...state, page })
             }
             now={now}
+            signedIn={signedIn}
+            savedPropertyIds={savedPropertyIds}
             outage={outage}
             dimmed={dimmed}
             onRetry={retry}
@@ -485,15 +501,17 @@ export function ResultsView({
                 )}
               >
                 {result.results.map((hit) => (
-                  <ResultCard key={hit.id} hit={hit} now={now} />
+                  <ResultCard
+                    key={hit.id}
+                    hit={hit}
+                    now={now}
+                    signedIn={signedIn}
+                    saved={savedPropertyIds.includes(hit.id)}
+                  />
                 ))}
               </div>
             )}
           </div>
-
-          {mapFeatureEnabled && !isDesktop && (
-            <MobileMapTogglePill onClick={handleToggleMapView} />
-          )}
         </>
       )}
 

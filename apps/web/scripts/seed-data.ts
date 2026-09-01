@@ -97,6 +97,8 @@ export interface SeedProperty {
   availableFrom: string | null
   epcRating: EpcRating | null
   councilTaxBand: CouncilTaxBand | null
+  /** Set when status is rejected (ADM-1). */
+  rejectionReason?: string | null
   addressLine1: string
   displayAddress: string
   town: string
@@ -192,6 +194,15 @@ export const SEED_USERS: SeedUser[] = [
     agencySlug: null,
     status: 'active',
   },
+  {
+    firebaseUid: 'seed-admin-anoop',
+    email: 'admin@doorstep.local',
+    displayName: 'Doorstep Admin',
+    phone: '07700 900200',
+    role: 'admin',
+    agencySlug: null,
+    status: 'active',
+  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -252,14 +263,15 @@ function buildPropertyImages(
 // ---------------------------------------------------------------------------
 // Properties
 //
-// 20 listings across the Reading/Thames Valley area: 12 sale, 8 rent; 15
-// published, 3 under_offer, 1 pending_review, 1 draft (PRD §9.3 statuses).
-// Coordinates are real-world approximations for each place, nudged to sit
-// inside the bounding box used across the app for local dev (lat
-// 51.40–51.55, lng -1.10 to -0.85). Only the draft listing (row 20, never
-// submitted) has no images — every other status has passed the wizard's
-// photo step (LST-2) at least once, including pending_review and
-// under_offer, which is why they carry images too, not just `published`.
+// 23 listings across the Reading/Thames Valley area: 14 sale, 9 rent; 15
+// published, 3 under_offer, 3 pending_review, 1 draft, 1 rejected
+// (PRD §9.3 statuses + M5 moderation fixtures). Coordinates are
+// real-world approximations for each place, nudged to sit inside the
+// bounding box used across the app for local dev (lat 51.40–51.55, lng
+// -1.10 to -0.85). Only the draft listing (never submitted) has no
+// images — every other status has passed the wizard's photo step
+// (LST-2) at least once, including pending_review, under_offer, and
+// rejected, which is why they carry images too, not just `published`.
 // ---------------------------------------------------------------------------
 
 export const SEED_PROPERTIES: SeedProperty[] = [
@@ -1128,5 +1140,289 @@ export const SEED_PROPERTIES: SeedProperty[] = [
     publishedAt: null,
     // Draft: hasn't reached the wizard's photo step (LST-2 step 5) yet.
     images: [],
+  },
+  {
+    slug: '2-bed-flat-reading-rg1-pending',
+    listerEmail: 'priya.kapoor@thamesidepropertypartners.co.uk',
+    agencySlug: 'thameside-property-partners',
+    channel: 'sale',
+    status: 'pending_review',
+    propertyType: 'flat',
+    title: '2 bed flat for sale',
+    description:
+      'A newly refurbished two-bedroom flat near Reading station, submitted ' +
+      'for moderation. Bright reception, fitted kitchen and allocated parking.',
+    features: [
+      'Near Reading station',
+      'Allocated parking',
+      'Recently refurbished',
+      'Second floor with lift',
+    ],
+    bedrooms: 2,
+    bathrooms: 1,
+    price: 295_000,
+    priceQualifier: 'offers_over',
+    tenure: 'leasehold',
+    deposit: null,
+    furnished: null,
+    availableFrom: null,
+    epcRating: 'C',
+    councilTaxBand: 'C',
+    addressLine1: '14 Station Approach',
+    displayAddress: 'Station Approach, Reading, RG1',
+    town: 'Reading',
+    outcode: 'RG1',
+    postcode: 'RG1 1LY',
+    location: { lat: 51.4585, lng: -0.9718 },
+    locationApproximate: false,
+    publishedAt: null,
+    images: buildPropertyImages(
+      '2-bed-flat-reading-rg1-pending',
+      '2 bed flat for sale',
+      4,
+      true,
+    ),
+  },
+  {
+    slug: '1-bed-flat-woodley-rg5-pending',
+    listerEmail: 'daniel.osei@cavershamkennetestates.co.uk',
+    agencySlug: 'caversham-kennet-estates',
+    channel: 'rent',
+    status: 'pending_review',
+    propertyType: 'flat',
+    title: '1 bed flat for rent',
+    description:
+      'A one-bedroom flat in Woodley awaiting approval. Available from next ' +
+      'month, part-furnished, with EPC C and a private balcony.',
+    features: [
+      'Private balcony',
+      'Part furnished',
+      'EPC C',
+      'Quiet cul-de-sac',
+    ],
+    bedrooms: 1,
+    bathrooms: 1,
+    price: 1_150,
+    priceQualifier: 'fixed',
+    tenure: null,
+    deposit: 1_150,
+    furnished: 'part_furnished',
+    availableFrom: '2026-10-01',
+    epcRating: 'C',
+    councilTaxBand: 'B',
+    addressLine1: '22 Malone Way',
+    displayAddress: 'Malone Way, Woodley, RG5',
+    town: 'Woodley',
+    outcode: 'RG5',
+    postcode: 'RG5 3HS',
+    location: { lat: 51.4538, lng: -0.9012 },
+    locationApproximate: false,
+    publishedAt: null,
+    images: buildPropertyImages(
+      '1-bed-flat-woodley-rg5-pending',
+      '1 bed flat for rent',
+      3,
+      false,
+    ),
+  },
+  {
+    slug: '3-bed-terraced-house-tilehurst-rg30-rejected',
+    listerEmail: 'david.whitfield@example.co.uk',
+    agencySlug: null,
+    channel: 'sale',
+    status: 'rejected',
+    propertyType: 'terraced',
+    title: '3 bed terraced house for sale',
+    description:
+      'Rejected on first review for incomplete photos — kept in the seed so ' +
+      'the lister resubmit path (rejected → pending_review) can be exercised.',
+    features: ['Needs better photos', 'Rear garden', 'Close to bus routes'],
+    bedrooms: 3,
+    bathrooms: 1,
+    price: 310_000,
+    priceQualifier: 'guide_price',
+    tenure: 'freehold',
+    deposit: null,
+    furnished: null,
+    availableFrom: null,
+    epcRating: 'D',
+    councilTaxBand: 'C',
+    rejectionReason: 'Poor or misleading photos',
+    addressLine1: '17 Norcot Road',
+    displayAddress: 'Norcot Road, Tilehurst, RG30',
+    town: 'Tilehurst',
+    outcode: 'RG30',
+    postcode: 'RG30 6BP',
+    location: { lat: 51.4589, lng: -1.0224 },
+    locationApproximate: true,
+    publishedAt: null,
+    images: buildPropertyImages(
+      '3-bed-terraced-house-tilehurst-rg30-rejected',
+      '3 bed terraced house for sale',
+      3,
+      false,
+    ),
+  },
+]
+
+// ---------------------------------------------------------------------------
+// Engagement fixtures (M4/M5) — enquiries, favourites, saved searches, reports
+// ---------------------------------------------------------------------------
+
+export interface SeedEnquiry {
+  /** Must match a SEED_PROPERTIES slug. */
+  propertySlug: string
+  /** Null = guest enquiry. Otherwise a SEED_USERS email. */
+  senderEmail: string | null
+  name: string
+  email: string
+  phone: string | null
+  message: string
+  viewingRequested: boolean
+  status: 'new' | 'contacted' | 'closed'
+}
+
+export interface SeedSavedProperty {
+  userEmail: string
+  propertySlug: string
+}
+
+export interface SeedSavedSearch {
+  userEmail: string
+  name: string
+  criteria: {
+    channel: 'sale' | 'rent'
+    locationLabel: string
+    location: GeoPoint | null
+    radiusMetres: number | null
+    filters: Record<string, unknown>
+  }
+}
+
+export interface SeedReport {
+  propertySlug: string
+  reporterEmail: string | null
+  reason: string
+  details: string | null
+  status: 'open' | 'resolved' | 'dismissed'
+}
+
+/** Guest + signed-in enquiries across a few live listings for inbox testing. */
+export const SEED_ENQUIRIES: SeedEnquiry[] = [
+  {
+    propertySlug: '2-bed-flat-reading-rg1',
+    senderEmail: 'sarah.coates@example.co.uk',
+    name: 'Sarah Coates',
+    email: 'sarah.coates@example.co.uk',
+    phone: '07700 900301',
+    message:
+      'Hi — we loved the photos of this flat. Are weekend viewings possible ' +
+      'over the next fortnight?',
+    viewingRequested: true,
+    status: 'new',
+  },
+  {
+    propertySlug: '2-bed-flat-reading-rg1',
+    senderEmail: null,
+    name: 'Tom Bradley',
+    email: 'tom.bradley@example.co.uk',
+    phone: null,
+    message:
+      'Interested as a cash buyer. Please send the lease length and service ' +
+      'charge details if available.',
+    viewingRequested: false,
+    status: 'contacted',
+  },
+  {
+    propertySlug: '3-bed-semi-detached-house-caversham-rg4',
+    senderEmail: 'sarah.coates@example.co.uk',
+    name: 'Sarah Coates',
+    email: 'sarah.coates@example.co.uk',
+    phone: '07700 900301',
+    message:
+      'Could you confirm whether the loft has been converted and if there ' +
+      'is off-street parking for two cars?',
+    viewingRequested: true,
+    status: 'new',
+  },
+  {
+    propertySlug: '1-bed-flat-reading-rg1',
+    senderEmail: null,
+    name: 'Amelia Chen',
+    email: 'amelia.chen@example.co.uk',
+    phone: '07700 900302',
+    message:
+      'Looking to move in mid-October. Is the flat still available and ' +
+      'pet-friendly for a small cat?',
+    viewingRequested: true,
+    status: 'new',
+  },
+  {
+    propertySlug: '4-bed-detached-house-earley-rg6',
+    senderEmail: null,
+    name: 'James Patel',
+    email: 'james.patel@example.co.uk',
+    phone: '07700 900303',
+    message:
+      'Is this still under offer, or would you consider further viewings?',
+    viewingRequested: false,
+    status: 'closed',
+  },
+]
+
+export const SEED_SAVED_PROPERTIES: SeedSavedProperty[] = [
+  {
+    userEmail: 'sarah.coates@example.co.uk',
+    propertySlug: '2-bed-flat-reading-rg1',
+  },
+  {
+    userEmail: 'sarah.coates@example.co.uk',
+    propertySlug: '3-bed-semi-detached-house-caversham-rg4',
+  },
+  {
+    userEmail: 'sarah.coates@example.co.uk',
+    propertySlug: '4-bed-detached-house-earley-rg6',
+  },
+]
+
+export const SEED_SAVED_SEARCHES: SeedSavedSearch[] = [
+  {
+    userEmail: 'sarah.coates@example.co.uk',
+    name: '2-bed Reading under £350k',
+    criteria: {
+      channel: 'sale',
+      locationLabel: 'Reading',
+      location: { lat: 51.4543, lng: -0.9781 },
+      radiusMetres: 8047,
+      filters: { minBeds: 2, maxPrice: 350_000 },
+    },
+  },
+  {
+    userEmail: 'sarah.coates@example.co.uk',
+    name: 'Caversham family homes',
+    criteria: {
+      channel: 'sale',
+      locationLabel: 'Caversham',
+      location: { lat: 51.4689, lng: -0.9731 },
+      radiusMetres: 4828,
+      filters: { minBeds: 3, maxPrice: 550_000 },
+    },
+  },
+]
+
+export const SEED_REPORTS: SeedReport[] = [
+  {
+    propertySlug: 'studio-flat-earley-rg6',
+    reporterEmail: 'sarah.coates@example.co.uk',
+    reason: 'Suspected duplicate',
+    details: 'Looks identical to another Earley studio listed last week.',
+    status: 'open',
+  },
+  {
+    propertySlug: '2-bed-flat-woodley-rg5',
+    reporterEmail: null,
+    reason: 'Misleading photos',
+    details: 'Photos appear to be from a different property.',
+    status: 'open',
   },
 ]

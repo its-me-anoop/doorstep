@@ -75,6 +75,7 @@ describe.skipIf(!TEST_DATABASE_URL)('Drizzle schema (live database)', () => {
         firebaseUid: `firebase-${crypto.randomUUID()}`,
         email: `lister-${crypto.randomUUID()}@example.co.uk`,
         displayName: 'Test Lister',
+        phone: null,
         role: 'owner',
         status: 'active',
       })

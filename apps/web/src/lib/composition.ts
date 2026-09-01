@@ -9,58 +9,25 @@
  * that boundary: app/** may not import from adapters/** except through
  * this file.
  *
- * `auth` is the first group of services wired here (EstablishSession,
- * TerminateSession, GetCurrentUser — PRD §8.4). `listers` (BecomeOwner,
- * CreateAgency — PRD §6.5 LST-1) is the second, `listings`
- * (CreateListingDraft, UpdateListing, SubmitListing, ChangeListingStatus,
- * ListMyListings, DeleteListing — PRD §6.5 LST-2/4/5, M1-DESIGN-SPEC.md §4)
- * the third — all three share the one DrizzleListingRepository instance,
- * since it implements both ListingReader and ListingWriter. `geocoding`
- * (SearchGeocode — PRD §8.6, §10 SRCH-1) is the fourth: PostcodesIoGeocoder
- * is always the `PostcodeGeocoder` (the postcode fast path); the
- * `PlaceSearcher` half is MapboxGeocoder when MAPBOX_ACCESS_TOKEN is set,
- * else the same PostcodesIoGeocoder instance falls back to its own
- * `searchPlaces` (see adapters/mapbox/'s doc comment for the documented
- * PRD deviation this represents). `geocodeCache` is constructed at MODULE
- * scope below, not inside this function — see the comment beside that
- * declaration for why. `images`
- * (RequestImageUpload, ProcessImage, ReorderImages, SetImageKind,
- * DeleteImage, ListListingImages, GetCoverBlurhashes — PRD §6.5 LST-3,
- * §8.7) is the fifth, wired to FirebaseStorageAdapter and the new
- * DrizzlePropertyImageRepository; FirebaseStorageAdapter's constructor
- * reads no env var itself (see that class's doc comment) so this
- * function's own eager-construction-of-everything shape still never
- * throws for a service group a given request doesn't touch. `searchSync`
- * (DrainOutbox, RebuildSearchIndex — PRD §8.6's outbox drain worker and
- * nightly reindex) is the sixth, wired to the new DrizzleOutboxRepository
- * and MeilisearchSearchIndex; the latter's constructor is lazy in the
- * same way (reads MEILISEARCH_HOST only once a method actually runs), so
- * it holds the same "never throws for an untouched service group"
- * property. `search` (SearchListings — the use case behind GET
- * /api/v1/search, PRD §10) is the seventh, sharing that same
- * MeilisearchSearchIndex instance — this key was renamed from its
- * previous `search` (which only ever meant search-*sync*) to `searchSync`
- * when this query-side group was added, freeing `search` for the public
- * query use case; app/api/cron/outbox-drain and app/api/cron/reindex were
- * updated to call `searchSync.*` accordingly. Later milestones add a
- * concrete adapter per port here as each remaining integration (Resend,
- * Upstash) lands. See PRD §8.5.
- *
- * Note: this constructs a DrizzleUserRepository, which calls
- * adapters/drizzle/client.ts's getDb() — that throws if DATABASE_URL
- * isn't set. That's expected: createServices() is meant to be called at
- * request time (inside a route handler or server component), by which
- * point the environment is configured, not at module-import time or in
- * a unit test — see tests/unit/ports/barrel.test.ts for how tests that
- * merely need createServices() to construct without a live database
- * satisfy that.
+ * Service groups: auth, listers, listings, geocoding, images, search,
+ * searchSync (M0–M3); enquiries, saved, account, admin, analytics,
+ * retention (M4–M5). Resend / Upstash / Turnstile adapters are selected
+ * via createMailer / createRateLimiter / createCaptchaVerifier — console
+ * / in-memory / allow-all fallbacks when credentials are unset so local
+ * and CI stay exercisable. See PRD §8.5.
  */
 
 import { getDb } from '@/adapters/drizzle/client'
 import { DrizzleAgencyRepository } from '@/adapters/drizzle/repositories/agency-repository'
+import { DrizzleAuditLogRepository } from '@/adapters/drizzle/repositories/audit-log-repository'
+import { DrizzleEnquiryRepository } from '@/adapters/drizzle/repositories/enquiry-repository'
+import { DrizzleEventRepository } from '@/adapters/drizzle/repositories/event-repository'
 import { DrizzleListingRepository } from '@/adapters/drizzle/repositories/listing-repository'
 import { DrizzleOutboxRepository } from '@/adapters/drizzle/repositories/outbox-repository'
 import { DrizzlePropertyImageRepository } from '@/adapters/drizzle/repositories/property-image-repository'
+import { DrizzleReportRepository } from '@/adapters/drizzle/repositories/report-repository'
+import { DrizzleSavedPropertyRepository } from '@/adapters/drizzle/repositories/saved-property-repository'
+import { DrizzleSavedSearchRepository } from '@/adapters/drizzle/repositories/saved-search-repository'
 import { DrizzleUserRepository } from '@/adapters/drizzle/repositories/user-repository'
 import {
   FirebaseAuthGateway,
@@ -70,13 +37,35 @@ import { InMemoryTtlGeocodeCache } from '@/adapters/in-memory-geocode-cache'
 import { MapboxGeocoder } from '@/adapters/mapbox'
 import { MeilisearchSearchIndex } from '@/adapters/meilisearch'
 import { PostcodesIoGeocoder } from '@/adapters/postcodesio'
+import { createMailer } from '@/adapters/resend'
 import { SystemClock } from '@/adapters/system-clock'
+import { createCaptchaVerifier } from '@/adapters/turnstile'
+import { createRateLimiter } from '@/adapters/upstash'
 import type { PlaceSearcher } from '@/ports/geocoder'
+import { DeleteAccount, GetMe, UpdateProfile } from '@/services/account'
+import {
+  DecideListing,
+  GetMetrics,
+  ListAuditLog,
+  ListModerationQueue,
+  ListOpenReports,
+  ManageUser,
+  ResolveReport,
+  SearchUsers,
+  SubmitReport,
+  VerifyAgency,
+} from '@/services/admin'
+import { RecordEvent } from '@/services/analytics'
 import {
   EstablishSession,
   GetCurrentUser,
   TerminateSession,
 } from '@/services/auth'
+import {
+  ListListerEnquiries,
+  SubmitEnquiry,
+  UpdateEnquiryStatus,
+} from '@/services/enquiries'
 import { SearchGeocode } from '@/services/geocoding'
 import {
   DeleteImage,
@@ -96,9 +85,19 @@ import {
   GetPublicListing,
   ListMyListings,
   ListNewestInArea,
+  ListPublishedSlugs,
   SubmitListing,
   UpdateListing,
 } from '@/services/listings'
+import { AnonymiseEnquiries } from '@/services/retention'
+import {
+  DeleteSavedSearch,
+  ListSavedProperties,
+  ListSavedSearches,
+  SaveProperty,
+  SaveSearch,
+  UnsaveProperty,
+} from '@/services/saved'
 import { SearchListings } from '@/services/search'
 import { DrainOutbox, RebuildSearchIndex } from '@/services/search-sync'
 
@@ -123,6 +122,7 @@ export interface ListingServices {
   deleteListing: DeleteListing
   getPublicListing: GetPublicListing
   listNewestInArea: ListNewestInArea
+  listPublishedSlugs: ListPublishedSlugs
 }
 
 export interface GeocodingServices {
@@ -148,6 +148,48 @@ export interface SearchServices {
   searchListings: SearchListings
 }
 
+export interface EnquiryServices {
+  submitEnquiry: SubmitEnquiry
+  listListerEnquiries: ListListerEnquiries
+  updateEnquiryStatus: UpdateEnquiryStatus
+}
+
+export interface SavedServices {
+  saveProperty: SaveProperty
+  unsaveProperty: UnsaveProperty
+  listSavedProperties: ListSavedProperties
+  saveSearch: SaveSearch
+  listSavedSearches: ListSavedSearches
+  deleteSavedSearch: DeleteSavedSearch
+}
+
+export interface AccountServices {
+  getMe: GetMe
+  updateProfile: UpdateProfile
+  deleteAccount: DeleteAccount
+}
+
+export interface AdminServices {
+  decideListing: DecideListing
+  listModerationQueue: ListModerationQueue
+  manageUser: ManageUser
+  searchUsers: SearchUsers
+  verifyAgency: VerifyAgency
+  getMetrics: GetMetrics
+  listAuditLog: ListAuditLog
+  submitReport: SubmitReport
+  listOpenReports: ListOpenReports
+  resolveReport: ResolveReport
+}
+
+export interface AnalyticsServices {
+  recordEvent: RecordEvent
+}
+
+export interface RetentionServices {
+  anonymiseEnquiries: AnonymiseEnquiries
+}
+
 export interface Services {
   auth: AuthServices
   listers: ListerServices
@@ -156,6 +198,12 @@ export interface Services {
   images: ImageServices
   search: SearchServices
   searchSync: SearchSyncServices
+  enquiries: EnquiryServices
+  saved: SavedServices
+  account: AccountServices
+  admin: AdminServices
+  analytics: AnalyticsServices
+  retention: RetentionServices
 }
 
 /**
@@ -167,27 +215,47 @@ export interface Services {
  * across requests and defeat the point entirely. SystemClock is a
  * dependency, not a shared resource, so it's fine to construct once
  * here rather than reusing the one createServices() builds per call.
+ *
+ * Rate limiter is also module-scoped when using the in-memory fallback
+ * so limits survive across requests in one process (same rationale).
  */
-const geocodeCache = new InMemoryTtlGeocodeCache(new SystemClock())
+const sharedClock = new SystemClock()
+const geocodeCache = new InMemoryTtlGeocodeCache(sharedClock)
+const sharedRateLimiter = createRateLimiter(sharedClock)
+
+function listingBaseUrl(): string {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
+    process.env.APP_URL?.replace(/\/$/, '') ||
+    'https://doorstep.local'
+  )
+}
 
 export function createServices(): Services {
-  const userRepository = new DrizzleUserRepository(getDb())
-  const agencyRepository = new DrizzleAgencyRepository(getDb())
-  const listingRepository = new DrizzleListingRepository(getDb())
-  const propertyImageRepository = new DrizzlePropertyImageRepository(getDb())
-  const outboxRepository = new DrizzleOutboxRepository(getDb())
+  const db = getDb()
+  const userRepository = new DrizzleUserRepository(db)
+  const agencyRepository = new DrizzleAgencyRepository(db)
+  const listingRepository = new DrizzleListingRepository(db)
+  const propertyImageRepository = new DrizzlePropertyImageRepository(db)
+  const outboxRepository = new DrizzleOutboxRepository(db)
+  const enquiryRepository = new DrizzleEnquiryRepository(db)
+  const savedPropertyRepository = new DrizzleSavedPropertyRepository(db)
+  const savedSearchRepository = new DrizzleSavedSearchRepository(db)
+  const auditLogRepository = new DrizzleAuditLogRepository(db)
+  const eventRepository = new DrizzleEventRepository(db)
+  const reportRepository = new DrizzleReportRepository(db)
   const authGateway = new FirebaseAuthGateway()
-  const clock = new SystemClock()
+  const clock = sharedClock
   const postcodeGeocoder = new PostcodesIoGeocoder()
-  // Mapbox is the PRD's named free-text provider, used only when a token
-  // is configured; postcodes.io's own Places API is the default
-  // otherwise — see adapters/mapbox/'s doc comment for the documented
-  // deviation this represents.
   const placeSearcher: PlaceSearcher = process.env.MAPBOX_ACCESS_TOKEN
     ? new MapboxGeocoder()
     : postcodeGeocoder
   const imageStorage = new FirebaseStorageAdapter()
   const searchIndex = new MeilisearchSearchIndex()
+  const mailer = createMailer()
+  const rateLimiter = sharedRateLimiter
+  const captchaVerifier = createCaptchaVerifier()
+  const baseUrl = listingBaseUrl()
 
   return {
     auth: {
@@ -236,6 +304,7 @@ export function createServices(): Services {
         agencyRepository,
         imageStorage,
       ),
+      listPublishedSlugs: new ListPublishedSlugs(listingRepository),
     },
     geocoding: {
       searchGeocode: new SearchGeocode(
@@ -298,6 +367,91 @@ export function createServices(): Services {
         imageStorage,
         searchIndex,
       ),
+    },
+    enquiries: {
+      submitEnquiry: new SubmitEnquiry(
+        listingRepository,
+        userRepository,
+        agencyRepository,
+        enquiryRepository,
+        mailer,
+        rateLimiter,
+        captchaVerifier,
+        clock,
+        { listingBaseUrl: baseUrl },
+      ),
+      listListerEnquiries: new ListListerEnquiries(enquiryRepository),
+      updateEnquiryStatus: new UpdateEnquiryStatus(
+        enquiryRepository,
+        enquiryRepository,
+        listingRepository,
+      ),
+    },
+    saved: {
+      saveProperty: new SaveProperty(
+        savedPropertyRepository,
+        listingRepository,
+      ),
+      unsaveProperty: new UnsaveProperty(savedPropertyRepository),
+      listSavedProperties: new ListSavedProperties(
+        savedPropertyRepository,
+        listingRepository,
+        propertyImageRepository,
+      ),
+      saveSearch: new SaveSearch(savedSearchRepository),
+      listSavedSearches: new ListSavedSearches(savedSearchRepository),
+      deleteSavedSearch: new DeleteSavedSearch(savedSearchRepository),
+    },
+    account: {
+      getMe: new GetMe(userRepository),
+      updateProfile: new UpdateProfile(userRepository),
+      deleteAccount: new DeleteAccount(
+        userRepository,
+        listingRepository,
+        listingRepository,
+        enquiryRepository,
+        savedPropertyRepository,
+        savedSearchRepository,
+        authGateway,
+        clock,
+      ),
+    },
+    admin: {
+      decideListing: new DecideListing(
+        listingRepository,
+        listingRepository,
+        userRepository,
+        auditLogRepository,
+        mailer,
+        clock,
+        { listingBaseUrl: baseUrl },
+      ),
+      listModerationQueue: new ListModerationQueue(listingRepository),
+      manageUser: new ManageUser(
+        userRepository,
+        listingRepository,
+        listingRepository,
+        auditLogRepository,
+        authGateway,
+        clock,
+      ),
+      searchUsers: new SearchUsers(userRepository),
+      verifyAgency: new VerifyAgency(agencyRepository, auditLogRepository),
+      getMetrics: new GetMetrics(
+        listingRepository,
+        userRepository,
+        eventRepository,
+      ),
+      listAuditLog: new ListAuditLog(auditLogRepository),
+      submitReport: new SubmitReport(reportRepository),
+      listOpenReports: new ListOpenReports(reportRepository),
+      resolveReport: new ResolveReport(reportRepository, auditLogRepository),
+    },
+    analytics: {
+      recordEvent: new RecordEvent(eventRepository),
+    },
+    retention: {
+      anonymiseEnquiries: new AnonymiseEnquiries(enquiryRepository, clock),
     },
   }
 }

@@ -36,13 +36,15 @@
  * trip to every request, working directly against the "p75 under 500ms"
  * exit criterion (PRD §13's M2 row) for zero behavioural gain: whether
  * checked proactively or not, an unreachable index still fails the same
- * way. Instead, any error `SearchIndex.search` itself throws is treated
- * as an infrastructure failure and wrapped in SearchUnavailableError —
- * the query was built by this class from already-validated input, so a
- * thrown error at this point is Meilisearch being unreachable or
- * misbehaving, not a malformed request. `healthy()` stays on the port for
- * callers that DO want a proactive check outside the request path (e.g. a
- * future admin status page); it is simply not this class's job.
+ * way. The Meilisearch adapter recovers a missing/unconfigured index
+ * (ensureSettings + retry) so a healthy daemon with no documents returns
+ * an empty page, not 503. An unrestricted query (channel + sort/page
+ * only — `/for-sale` and `/to-rent` first load) that still throws after
+ * that recovery also returns an empty listing page; filtered/geo queries
+ * wrap the throw in SearchUnavailableError. `healthy()` stays on the
+ * port for callers that DO want a proactive check outside the request
+ * path (e.g. a future admin status page); it is simply not this class's
+ * job.
  */
 
 import { getDisplayStatus } from '@/domain/display-status'
@@ -206,6 +208,40 @@ export function toPublicHit(document: ListingSearchDocument): PublicSearchHit {
   }
 }
 
+/** Channel + sort/page only — `/for-sale` and `/to-rent` first load. */
+export function isUnrestrictedSearchInput(input: SearchQueryInput): boolean {
+  return (
+    input.lat === undefined &&
+    input.lng === undefined &&
+    input.bboxNeLat === undefined &&
+    input.bboxNeLng === undefined &&
+    input.bboxSwLat === undefined &&
+    input.bboxSwLng === undefined &&
+    input.priceMin === undefined &&
+    input.priceMax === undefined &&
+    input.bedsMin === undefined &&
+    input.bedsMax === undefined &&
+    input.bathsMin === undefined &&
+    (input.types === undefined || input.types.length === 0) &&
+    input.tenure === undefined &&
+    input.furnished === undefined &&
+    input.availableBy === undefined &&
+    input.newHome === undefined &&
+    input.town === undefined &&
+    input.outcode === undefined
+  )
+}
+
+export function emptySearchResult(page = 1): PublicSearchResult {
+  return {
+    results: [],
+    totalCount: 0,
+    page,
+    totalPages: 0,
+    facets: { propertyType: {} },
+  }
+}
+
 export class SearchListings {
   constructor(private readonly searchIndex: SearchIndex) {}
 
@@ -216,6 +252,19 @@ export class SearchListings {
     try {
       result = await this.searchIndex.search(query)
     } catch (error) {
+      // /for-sale and /to-rent first load is this unrestricted shape
+      // (channel + default sort/page only). A missing/unready index is
+      // recovered inside the Meilisearch adapter; if search still
+      // throws here, returning an empty listing page is the honest
+      // first-load state — 503 search_unavailable is reserved for
+      // filtered/geo queries that genuinely cannot run.
+      if (isUnrestrictedSearchInput(input)) {
+        console.error(
+          'SearchListings: unrestricted search failed; returning empty listings',
+          error,
+        )
+        return emptySearchResult(query.page)
+      }
       throw new SearchUnavailableError(error)
     }
 

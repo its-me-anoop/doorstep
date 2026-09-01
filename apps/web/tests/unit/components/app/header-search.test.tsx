@@ -64,4 +64,13 @@ describe('HeaderSearch', () => {
     fireEvent.click(button)
     expect(button).toHaveAttribute('aria-expanded', 'true')
   })
+
+  it('expands the combobox in document flow, not as an overlay', () => {
+    pathname = '/for-sale'
+    render(<HeaderSearch />)
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+    const expanded = screen.getByTestId('header-search-expanded')
+    expect(expanded.className).toContain('basis-full')
+    expect(expanded.className).not.toContain('absolute')
+  })
 })

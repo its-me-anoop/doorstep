@@ -61,6 +61,18 @@ describe('revalidateListingPaths', () => {
     expect(paths).toContain('/for-sale/emmer-green')
   })
 
+  it('revalidates the Liverpool area landing page for a Liverpool-town listing', () => {
+    revalidatePathMock.mockClear()
+    revalidateListingPaths({
+      slug: 'a-slug',
+      channel: 'sale',
+      town: 'Liverpool',
+      outcode: 'L1',
+    })
+
+    expect(revalidatePathMock).toHaveBeenCalledWith('/for-sale/liverpool')
+  })
+
   it('revalidates only the detail page for a town/outcode outside the curated set', () => {
     revalidatePathMock.mockClear()
     revalidateListingPaths({

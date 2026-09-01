@@ -13,7 +13,9 @@ import type { Clock } from '@/ports/clock'
 import {
   UniqueViolationError,
   type User,
+  type UserCursorPage,
   type UserRepository,
+  type UserSearchOptions,
 } from '@/ports/user-repository'
 
 export class FakeClock implements Clock {
@@ -34,6 +36,7 @@ export class FakeClock implements Clock {
  * see DecodedIdentity's doc comment. */
 export class FakeAuthGateway implements AuthGateway {
   readonly revokedUids: string[] = []
+  readonly deletedUids: string[] = []
   readonly roleClaimsSet: Array<{ uid: string; claims: RoleClaims }> = []
   private readonly identities = new Map<string, DecodedIdentity>()
 
@@ -64,6 +67,10 @@ export class FakeAuthGateway implements AuthGateway {
 
   async setRoleClaims(uid: string, claims: RoleClaims): Promise<void> {
     this.roleClaimsSet.push({ uid, claims })
+  }
+
+  async deleteUser(uid: string): Promise<void> {
+    this.deletedUids.push(uid)
   }
 
   private resolve(credential: string): DecodedIdentity {
@@ -118,6 +125,39 @@ export class FakeUserRepository implements UserRepository {
     const updated = { ...existing, ...changes }
     this.byId.set(id, updated)
     return updated
+  }
+
+  async search(options: UserSearchOptions = {}): Promise<UserCursorPage> {
+    const { q, cursor, limit = 20 } = options
+    let matches = [...this.byId.values()]
+    if (q) {
+      const needle = q.toLowerCase()
+      matches = matches.filter(
+        (user) =>
+          user.displayName.toLowerCase().includes(needle) ||
+          user.email.toLowerCase().includes(needle),
+      )
+    }
+    const startIndex = cursor
+      ? matches.findIndex((user) => user.id === cursor) + 1
+      : 0
+    const page = matches.slice(startIndex, startIndex + limit)
+    const nextCursor =
+      startIndex + limit < matches.length ? (page.at(-1)?.id ?? null) : null
+    return { data: page, nextCursor }
+  }
+
+  async countCreatedSince(since: Date): Promise<number> {
+    return [...this.byId.values()].filter(
+      (user) => user.id && since.getTime() <= Date.now(),
+    ).length
+  }
+
+  async delete(id: string): Promise<void> {
+    if (!this.byId.has(id)) {
+      throw new Error(`FakeUserRepository.delete: no user with id ${id}`)
+    }
+    this.byId.delete(id)
   }
 
   /** Test helper: seed a user directly, bypassing create(). */

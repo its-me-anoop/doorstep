@@ -32,7 +32,7 @@
  *   pnpm seed:search-5k            seed 5000 (or --count=N) and index them
  *   pnpm seed:search-5k:clean      delete the bench rows from both stores,
  *                                  leaving whatever else is indexed (the
- *                                  fixed ~20-listing seed) untouched
+ *                                  fixed ~23-listing seed) untouched
  *
  * There is no live database on this development machine — this script,
  * like scripts/seed.ts, is meant to be run against a real local Postgres

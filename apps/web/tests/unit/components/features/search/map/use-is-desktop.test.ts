@@ -4,10 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useIsDesktop } from '@/components/features/search/map/use-is-desktop'
 
 function stubMatchMedia(initialMatches: boolean) {
-  let changeHandler: ((event: { matches: boolean }) => void) | null = null
+  let changeHandler: (() => void) | null = null
   const mql = {
     matches: initialMatches,
-    addEventListener: vi.fn((_event: string, handler: typeof changeHandler) => {
+    addEventListener: vi.fn((_event: string, handler: () => void) => {
       changeHandler = handler
     }),
     removeEventListener: vi.fn(),
@@ -16,7 +16,7 @@ function stubMatchMedia(initialMatches: boolean) {
   return {
     change(matches: boolean) {
       mql.matches = matches
-      changeHandler?.({ matches })
+      changeHandler?.()
     },
   }
 }

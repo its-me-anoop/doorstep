@@ -58,6 +58,8 @@ export interface AuthGateway {
   revokeSessions(uid: string): Promise<void>
   /** Sets the role/agencyId custom claims baked into future tokens. */
   setRoleClaims(uid: string, claims: RoleClaims): Promise<void>
+  /** Hard-deletes the Firebase Auth user (PRD §6.3 ACC-3 account deletion). */
+  deleteUser(uid: string): Promise<void>
 }
 
 /**

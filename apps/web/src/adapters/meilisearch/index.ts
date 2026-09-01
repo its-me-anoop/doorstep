@@ -234,6 +234,40 @@ function assertTaskSucceeded(task: Task): void {
   }
 }
 
+/**
+ * Errors that mean "Meilisearch is reachable, but this index isn't
+ * queryable yet" — typically the index was never created because
+ * `ensureSettings()` only runs from reindex/outbox drain, not from the
+ * public search path. Those are not an outage: creating the index and
+ * retrying returns an honest empty hit set.
+ *
+ * Connection failures, auth failures, and 5xx stay non-recoverable so
+ * SearchListings can still surface a real 503.
+ */
+const RECOVERABLE_SEARCH_CODES = new Set([
+  'index_not_found',
+  'invalid_search_filter',
+  'invalid_search_sort',
+  'invalid_search_facets',
+])
+
+export function isRecoverableSearchIndexError(error: unknown): boolean {
+  const codes: string[] = []
+  let current: unknown = error
+  for (let depth = 0; depth < 4 && current && typeof current === 'object';) {
+    const record = current as { code?: unknown; cause?: unknown }
+    if (typeof record.code === 'string') codes.push(record.code)
+    current = record.cause
+    depth += 1
+  }
+  if (codes.some((code) => RECOVERABLE_SEARCH_CODES.has(code))) return true
+
+  const message = error instanceof Error ? error.message : String(error)
+  return /index_not_found|index not found|invalid.?search.?(filter|sort|facets)/i.test(
+    message,
+  )
+}
+
 export class MeilisearchSearchIndex implements SearchIndex {
   private readonly env: Record<string, string | undefined>
   private clientInstance: Meilisearch | undefined
@@ -291,7 +325,22 @@ export class MeilisearchSearchIndex implements SearchIndex {
   }
 
   async search(query: SearchQuery): Promise<SearchResult> {
-    const response = await this.index().search(null, {
+    try {
+      return await this.searchOnce(query)
+    } catch (error) {
+      if (!isRecoverableSearchIndexError(error)) throw error
+      // First public search against a never-reindexed preview/prod
+      // instance: the daemon is up, the index just doesn't exist yet
+      // (or exists without filterable/sortable attributes). Create it
+      // and retry once so GET /api/v1/search returns an empty page
+      // instead of 503 search_unavailable.
+      await this.ensureSettings()
+      return this.searchOnce(query)
+    }
+  }
+
+  private async searchOnce(query: SearchQuery): Promise<SearchResult> {
+    const response = await this.index().search('', {
       filter: buildFilterExpression(query),
       sort: buildSortExpression(query.sort),
       facets: [...FACET_ATTRIBUTES],

@@ -55,6 +55,7 @@ describe.skipIf(!TEST_DATABASE_URL)(
         firebaseUid: `firebase-${crypto.randomUUID()}`,
         email: `agent-${crypto.randomUUID()}@example.co.uk`,
         displayName: 'Test Agent',
+        phone: null,
         role: 'user',
         agencyId: null,
         status: 'active',

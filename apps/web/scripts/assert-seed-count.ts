@@ -1,7 +1,7 @@
 /**
  * CI-only assertion, run after scripts/seed.ts against the postgis
  * service container (.github/workflows/ci.yml `integration` job): confirms
- * exactly the 20 PRD-specified seed properties exist.
+ * exactly the 23 seeded properties exist.
  *
  * Counts by joining through users.firebase_uid's `seed-` prefix rather
  * than a raw `count(*) from properties`, because
@@ -14,7 +14,7 @@ import { count, eq, like } from 'drizzle-orm'
 
 import { getDb, schema } from '@/adapters/drizzle'
 
-const EXPECTED_SEED_PROPERTY_COUNT = 20
+const EXPECTED_SEED_PROPERTY_COUNT = 23
 
 async function main(): Promise<void> {
   const db = getDb()

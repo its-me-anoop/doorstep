@@ -183,11 +183,11 @@ jobs:
         # the FK-cycle-breaking logic actually matters — is ever exercised
         # for real. Runs twice to prove the idempotency claim: a second
         # run against rows the first run just inserted must succeed and
-        # still leave exactly 20 properties, not fail or duplicate rows.
+        # still leave exactly 23 properties, not fail or duplicate rows.
         run: |
           pnpm seed
           pnpm seed
-      - name: Assert the seed produced exactly 20 properties
+      - name: Assert the seed produced exactly 23 properties
         working-directory: apps/web
         env:
           DATABASE_URL: postgres://doorstep:doorstep@localhost:5432/doorstep_test

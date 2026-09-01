@@ -86,6 +86,7 @@ export class EstablishSession {
         firebaseUid: identity.uid,
         email: identity.email,
         displayName: identity.displayName ?? identity.email,
+        phone: null,
         role: 'user',
         agencyId: null,
         status: 'active',

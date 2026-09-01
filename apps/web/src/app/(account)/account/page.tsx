@@ -2,33 +2,16 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
+import { DeleteAccountButton } from '@/components/features/account/delete-account-button'
+import { ProfileForm } from '@/components/features/account/profile-form'
 import { Button } from '@/components/ui/button'
 import { greetingFor } from '@/lib/greeting'
 import { getSessionUser } from '@/lib/session'
 
 export const metadata: Metadata = { title: 'Account' }
 
-/**
- * M0's one authenticated page: greeting, profile summary, sign-out (the
- * sign-out control lives in the shared SiteHeader). No sidebar nav, no
- * teased "coming soon" sections — DESIGN-SPEC.md §5 is explicit that
- * ships-what-exists beats stubbing out pages that don't. Editable
- * name/phone and account deletion are in the full design spec but need
- * services this milestone doesn't build (UpdateProfile, DeleteAccount);
- * left for a later step — see this commit's fidelity notes.
- *
- * M1 addition (M1-DESIGN-SPEC.md §2.0): a lister entry point below the
- * profile panel, plain flow, no new card — role `user` gets wayfinding
- * to /onboarding; anyone already onboarded (owner/agent/admin) gets a
- * link straight to /lister instead, with no re-onboarding prompt.
- */
 export default async function AccountPage() {
   const session = await getSessionUser()
-  // Defence in depth: proxy.ts already redirects unauthenticated
-  // requests before this ever renders (lib/decide-gate.ts's cheap,
-  // unverified check). This is the real, cryptographically-verified
-  // check (PRD §8.4) — it can still fail here if a session was revoked
-  // or expired between the two.
   if (!session) redirect('/sign-in?next=%2Faccount')
 
   const { user } = session
@@ -42,12 +25,6 @@ export default async function AccountPage() {
 
       <div className="border-border bg-card mt-10 rounded-[var(--radius-lg)] border p-8">
         <dl className="flex flex-col gap-6">
-          <div>
-            <dt className="text-muted-foreground text-sm">Name</dt>
-            <dd className="text-foreground mt-1 text-base">
-              {user.displayName}
-            </dd>
-          </div>
           <div>
             <dt className="text-muted-foreground text-sm">Email</dt>
             <dd className="text-foreground mt-1 text-base">{user.email}</dd>
@@ -64,6 +41,31 @@ export default async function AccountPage() {
             </dd>
           </div>
         </dl>
+
+        <ProfileForm
+          initialDisplayName={user.displayName}
+          initialPhone={user.phone}
+        />
+      </div>
+
+      <div className="mt-10 flex flex-col gap-3">
+        <h2 className="text-[length:var(--text-h3)]">Saved items</h2>
+        <div className="flex flex-wrap gap-3">
+          <Button
+            render={<Link href="/account/favourites" />}
+            variant="secondary"
+            className="h-11 rounded-[var(--radius-md)] px-6"
+          >
+            Favourites
+          </Button>
+          <Button
+            render={<Link href="/account/saved-searches" />}
+            variant="secondary"
+            className="h-11 rounded-[var(--radius-md)] px-6"
+          >
+            Saved searches
+          </Button>
+        </div>
       </div>
 
       <div className="mt-12">
@@ -82,14 +84,44 @@ export default async function AccountPage() {
             </Button>
           </>
         ) : (
-          <Button
-            render={<Link href="/lister" />}
-            variant="secondary"
-            className="h-11 rounded-[var(--radius-md)] px-6"
-          >
-            Go to your listings
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              render={<Link href="/lister" />}
+              variant="secondary"
+              className="h-11 rounded-[var(--radius-md)] px-6"
+            >
+              Your listings
+            </Button>
+            {(user.role === 'owner' ||
+              user.role === 'agent' ||
+              user.role === 'admin') && (
+              <Button
+                render={<Link href="/lister/enquiries" />}
+                variant="secondary"
+                className="h-11 rounded-[var(--radius-md)] px-6"
+              >
+                Enquiries inbox
+              </Button>
+            )}
+          </div>
         )}
+      </div>
+
+      <div className="border-border mt-16 border-t pt-10">
+        <h2 className="text-[length:var(--text-h3)]">Delete account</h2>
+        <p className="text-muted-foreground mt-2 max-w-[60ch] text-sm leading-relaxed">
+          Remove your Doorstep profile and personal data in line with our{' '}
+          <Link
+            href="/privacy"
+            className="text-primary underline-offset-2 hover:underline"
+          >
+            privacy policy
+          </Link>
+          .
+        </p>
+        <div className="mt-4">
+          <DeleteAccountButton />
+        </div>
       </div>
     </div>
   )

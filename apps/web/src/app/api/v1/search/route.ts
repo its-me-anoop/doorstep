@@ -18,7 +18,11 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { apiError } from '@/lib/api-error'
 import { createServices } from '@/lib/composition'
 import { searchQuerySchema } from '@/lib/validation/search'
-import { SearchUnavailableError } from '@/services/search'
+import {
+  SearchUnavailableError,
+  emptySearchResult,
+  isUnrestrictedSearchInput,
+} from '@/services/search'
 
 /** Every field searchQuerySchema knows about, read as a raw string (or
  * `undefined` when absent) — safeParse itself does every coercion/bound
@@ -78,6 +82,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ data: result })
   } catch (error) {
     if (error instanceof SearchUnavailableError) {
+      // `/for-sale` and `/to-rent` first load is channel-only. An
+      // empty or unconfigured index is not an outage — return the
+      // same empty page SSR paints so the client never swaps in the
+      // outage panel on that path.
+      if (isUnrestrictedSearchInput(parsed.data)) {
+        return NextResponse.json({
+          data: emptySearchResult(parsed.data.page),
+        })
+      }
       return apiError(
         503,
         'search_unavailable',

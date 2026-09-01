@@ -83,5 +83,59 @@ describe('ports barrel', () => {
 
       expect(services.search.searchListings).toBeDefined()
     })
+
+    it('wires the enquiries service group', () => {
+      const services = createServices()
+
+      expect(services.enquiries.submitEnquiry).toBeDefined()
+      expect(services.enquiries.listListerEnquiries).toBeDefined()
+      expect(services.enquiries.updateEnquiryStatus).toBeDefined()
+    })
+
+    it('wires the saved service group', () => {
+      const services = createServices()
+
+      expect(services.saved.saveProperty).toBeDefined()
+      expect(services.saved.unsaveProperty).toBeDefined()
+      expect(services.saved.listSavedProperties).toBeDefined()
+      expect(services.saved.saveSearch).toBeDefined()
+      expect(services.saved.listSavedSearches).toBeDefined()
+      expect(services.saved.deleteSavedSearch).toBeDefined()
+    })
+
+    it('wires the account service group', () => {
+      const services = createServices()
+
+      expect(services.account.getMe).toBeDefined()
+      expect(services.account.updateProfile).toBeDefined()
+      expect(services.account.deleteAccount).toBeDefined()
+    })
+
+    it('wires the admin service group', () => {
+      const services = createServices()
+
+      expect(services.admin.decideListing).toBeDefined()
+      expect(services.admin.listModerationQueue).toBeDefined()
+      expect(services.admin.manageUser).toBeDefined()
+      expect(services.admin.searchUsers).toBeDefined()
+      expect(services.admin.verifyAgency).toBeDefined()
+      expect(services.admin.getMetrics).toBeDefined()
+      expect(services.admin.listAuditLog).toBeDefined()
+      expect(services.admin.submitReport).toBeDefined()
+      expect(services.admin.listOpenReports).toBeDefined()
+      expect(services.admin.resolveReport).toBeDefined()
+    })
+
+    it('wires the analytics service group', () => {
+      const services = createServices()
+
+      expect(services.analytics.recordEvent).toBeDefined()
+    })
+
+    it('wires the retention service group', () => {
+      const services = createServices()
+
+      expect(services.retention.anonymiseEnquiries).toBeDefined()
+    })
   })
 })

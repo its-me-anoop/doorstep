@@ -19,9 +19,9 @@ This repository has completed **M1 — Listing CRUD + images**,
 status](#delivery-status) below): account/auth, lister onboarding, the
 create-listing wizard, the image pipeline, the my-listings dashboard, the
 Meilisearch-backed search API, results UI, area landing pages, the public
-listing detail page and the clustered map view are all built and tested.
-Favourites/saved searches, enquiries, admin and email are not built yet —
-don't go looking for them.
+listing detail page, the clustered map view, favourites and saved searches,
+enquiries, admin moderation, and launch hardening (legal pages, SEO, DSAR)
+are all built and tested.
 
 ## Delivery status
 
@@ -72,10 +72,13 @@ Full milestone plan: [`docs/PRD.md` §13](docs/PRD.md#13-milestones-and-delivery
     lease (`src/adapters/drizzle/repositories/outbox-repository.ts`),
     re-derives each entry from Postgres's _current_ state rather than
     trusting a possibly-stale `op`, and issues one batched
-    upsert/delete call to Meilisearch. `GET /api/cron/outbox-drain` runs
-    it every minute (`apps/web/vercel.json`'s `* * * * *` cron), gated by
-    `CRON_SECRET` (`src/lib/verify-cron-request.ts`) — this is what the
-    PRD §6.5 LST-5 "search visibility within 1 minute" target rides on.
+    upsert/delete call to Meilisearch. `GET /api/cron/outbox-drain`
+    is the drain endpoint (gated by `CRON_SECRET`). On Vercel Hobby the
+    vercel.json schedule is daily (Hobby forbids sub-daily crons); the
+    `.github/workflows/outbox-drain.yml` workflow pings it every 5
+    minutes when `APP_URL`/`CRON_SECRET` secrets are set. On Vercel Pro,
+    restore `* * * * *` in vercel.json for the PRD §6.5 LST-5
+    "search visibility within 1 minute" target.
   - **Nightly reindex** — `GET /api/cron/reindex` (03:00 daily cron) runs
     `RebuildSearchIndex` (`src/services/search-sync/rebuild-search-index.ts`):
     clear-then-rebuild from Postgres, page by page, comparing Postgres's
@@ -190,7 +193,45 @@ m3.smoke.spec.ts` (CI, no live stack) proves the map shell never crashes
     single-property map slot (the M3 design spec's own closing appendix)
     is not built this milestone; the `MediaPlaceholder` on `/property/
 {slug}` is unchanged. Tracked as a follow-up, not silently dropped.
-- **M4 (Engagement) through M6 (hardening + launch)** — not started.
+- **M4 — Engagement.** Done. Signed-in buyers can save properties and
+  named searches; guests and signed-in users can enquire on live listings
+  with abuse controls:
+  - **Favourites** — `SaveHeartButton` on result cards and the detail page;
+    `PUT`/`DELETE /api/v1/me/saved-properties/{propertyId}`; `/account/
+    favourites` lists saved homes with unsave.
+  - **Saved searches** — `SaveSearchButton` on the results shell maps
+    `SearchUrlState` to `SavedSearchCriteria` and `POST /api/v1/me/saved-
+    searches`; `/account/saved-searches` lists and deletes named filters.
+  - **Enquiries** — `EnquiryForm` on the detail lister card with
+    Cloudflare Turnstile (`adapters/turnstile/`), Upstash/in-memory rate
+    limits (`adapters/upstash/`), and Resend/console mailer delivery
+    (`adapters/resend/`); lister inbox at `/lister/enquiries`.
+  - **Account** — profile edit and GDPR delete account (`DELETE /api/v1/
+    me`, `DeleteAccount` service).
+  - **Detail polish** — cover gallery, enquiry CTA, public location map
+    (OpenStreetMap embed, DET-3).
+- **M5 — Admin.** Done. Internal team moderates listings and users behind
+  the `(admin)` route group:
+  - **Moderation queue** — pending listings, approve/reject with emails
+    and audit log entries (`DecideListing`, `GET /api/v1/admin/queue`).
+  - **Reports** — public report link on listings; admin resolve flow.
+  - **Users & agencies** — search, suspend, verify agencies.
+  - **Metrics & audit** — dashboard counts, `audit_log` append-only trail.
+  - **Analytics** — `POST /api/v1/events` for client events (phone reveal,
+    etc.).
+  - **Retention** — `GET /api/cron/retention` anonymises stale enquiries.
+- **M6 — Hardening + beta launch.** Done (code). Launch ops remain manual
+  (see [`docs/LAUNCH-CHECKLIST.md`](docs/LAUNCH-CHECKLIST.md)):
+  - **SEO** — dynamic `sitemap.ts`, `robots.ts`, JSON-LD on `/property/
+    {slug}`, per-listing OG images.
+  - **Legal / GDPR** — `/privacy`, `/terms`, `/cookies`, `/complaints`;
+    cookie consent banner; DSAR export/erase scripts (`pnpm dsar:export`,
+    `pnpm dsar:erase`) and [`docs/runbooks/DSAR.md`](docs/runbooks/DSAR.md).
+  - **Security** — OWASP ASVS L1 self-assessment
+    ([`docs/security/OWASP-ASVS-L1.md`](docs/security/OWASP-ASVS-L1.md)).
+  - **Operations** — search outage runbook
+    ([`docs/runbooks/INCIDENT-SEARCH-OUTAGE.md`](docs/runbooks/INCIDENT-
+    SEARCH-OUTAGE.md)); e2e axe smoke on legal pages (`m4.smoke.spec.ts`).
 
 ## Stack
 
@@ -205,8 +246,8 @@ m3.smoke.spec.ts` (CI, no live stack) proves the map shell never crashes
 | Search           | Meilisearch Cloud, EU region — wired M2: index + settings, transactional-outbox sync, nightly reindex, public search API (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and ADR-0003/0005/0008)                                            |
 | File storage     | Firebase Storage, behind an `ImageStorage` port (wired M1: signed uploads, sharp variants, EXIF strip, blurhash, download-token URLs)                                                                                                           |
 | Maps + geocoding | postcodes.io UK postcode fast-path (wired M1) and free-text place search (wired M2, `GET /api/v1/geocode?q=`) — Mapbox when `MAPBOX_ACCESS_TOKEN` is set, else postcodes.io's own Places API (ADR-0007). Map view (wired M3): MapLibre GL JS + OpenFreeMap tiles by default, Mapbox GL JS when `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` is set, behind the same `MapAdapter` component boundary (ADR-0009) |
-| Email            | Resend + React Email (wired from M4, or earlier for auth emails)                                                                                                                                                                                |
-| Rate limiting    | Upstash Redis (wired from M4)                                                                                                                                                                                                                   |
+| Email            | Resend + React Email (wired M4: enquiry/admin emails; `ConsoleMailer` fallback when `RESEND_API_KEY` unset)                                                                                                                                       |
+| Rate limiting    | Upstash Redis (wired M4: enquiry spam controls; `InMemoryRateLimiter` fallback when Upstash env unset)                                                                                                                                           |
 | Testing          | Vitest 4 (node + integration + jsdom projects) + Playwright + axe                                                                                                                                                                               |
 
 Full rationale for each choice: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
@@ -268,7 +309,7 @@ cp .env.example .env.local
 # Setup (manual accounts) if you don't have Firebase/Neon projects yet.
 
 pnpm db:migrate   # applies migrations, including PostGIS + citext (0000)
-pnpm seed         # inserts ~20 realistic Reading/Thames Valley listings
+pnpm seed         # inserts ~23 Reading/Thames Valley listings + M4/M5 fixtures
 pnpm dev          # http://localhost:3000
 ```
 
@@ -450,9 +491,9 @@ Run from the repo root (each proxies to `apps/web` via pnpm workspaces):
 | `pnpm test:e2e`             | Playwright (`tests/e2e`)                                                                                                                                                    |
 | `pnpm db:generate`          | `drizzle-kit generate` — writes a new migration from schema changes                                                                                                         |
 | `pnpm db:migrate`           | `drizzle-kit migrate` — applies pending migrations                                                                                                                          |
-| `pnpm seed`                 | Runs `apps/web/scripts/seed.ts` — idempotent, inserts ~20 fixture listings                                                                                                  |
+| `pnpm seed`                 | Runs `apps/web/scripts/seed.ts` — idempotent; ~23 listings, admin user, enquiries, favourites, saved searches, reports                                                                                                  |
 | `pnpm seed:search-5k`       | Inserts and indexes 5,000 synthetic listings (`apps/web/scripts/seed-search-5k.ts`) — PRD §13's M2 bench-evidence exit criterion. See [Search](#search) below               |
-| `pnpm seed:search-5k:clean` | Removes the bench-generated rows from both Postgres and Meilisearch, leaving the ~20 fixture listings untouched                                                             |
+| `pnpm seed:search-5k:clean` | Removes the bench-generated rows from both Postgres and Meilisearch, leaving the ~23 fixture listings untouched                                                             |
 | `pnpm bench:search`         | Fires 300 mixed `GET /api/v1/search` requests against a running server and prints p50/p75/p95/p99 latency (`apps/web/scripts/search-bench.ts`). See [Search](#search) below |
 | `pnpm emulator:storage`     | Starts the Firebase Storage emulator on port 9199 — see [Firebase Storage emulator](#firebase-storage-emulator-no-live-bucket-needed)                                       |
 
@@ -461,9 +502,9 @@ A few scripts aren't proxied at the root and need `pnpm --filter web run <name>`
 | Script                      | What it does                                                                                                                                                                                                                                                                                                                                                     |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `start`                     | `next start` — serves the production build (run `pnpm build` first)                                                                                                                                                                                                                                                                                              |
-| `seed:assert`               | Asserts the seed produced exactly 20 properties (used by CI after seeding twice, to prove idempotency)                                                                                                                                                                                                                                                           |
-| `reindex:local`             | Runs `RebuildSearchIndex` locally against `DATABASE_URL`/`MEILISEARCH_HOST` — the same use case `GET /api/cron/reindex` calls, without needing a signed cron request. See [Search](#search) below for the Storage-emulator dependency this has when the ~20 fixture listings have images                                                                         |
-| `backfill:storage-emulator` | Uploads a tiny real image to every variant path the ~20 fixture listings' `property_images` rows expect, against the Firebase Storage emulator — closes the gap `seed.ts` leaves (it inserts `property_images` rows directly, never runs a real upload), so `reindex:local` and the public detail page can resolve real image URLs locally without a live bucket |
+| `seed:assert`               | Asserts the seed produced exactly 23 properties (used by CI after seeding twice, to prove idempotency)                                                                                                                                                                                                                                                           |
+| `reindex:local`             | Runs `RebuildSearchIndex` locally against `DATABASE_URL`/`MEILISEARCH_HOST` — the same use case `GET /api/cron/reindex` calls, without needing a signed cron request. See [Search](#search) below for the Storage-emulator dependency this has when the ~23 fixture listings have images                                                                         |
+| `backfill:storage-emulator` | Uploads a tiny real image to every variant path the ~23 fixture listings' `property_images` rows expect, against the Firebase Storage emulator — closes the gap `seed.ts` leaves (it inserts `property_images` rows directly, never runs a real upload), so `reindex:local` and the public detail page can resolve real image URLs locally without a live bucket |
 
 ## Search
 
@@ -502,9 +543,9 @@ M2 sections; the free-text place-search provider choice:
    - `pnpm seed:search-5k` — inserts and indexes 5,000 synthetic,
      image-less listings directly (bypassing `ImageStorage` entirely), the
      fastest way to get real, non-trivial search results locally. `pnpm
-seed:search-5k:clean` removes them again without touching the ~20
+seed:search-5k:clean` removes them again without touching the ~23
      fixture listings.
-   - `pnpm --filter web reindex:local` — indexes the ~20 realistic fixture
+   - `pnpm --filter web reindex:local` — indexes the ~23 realistic fixture
      listings instead, by running the same `RebuildSearchIndex` use case
      `GET /api/cron/reindex` calls. This one has a real dependency worth
      knowing about: several fixture listings have photos, and indexing
@@ -544,16 +585,20 @@ requests that would all just 503.
    Production) — previews and prod must use different prefixes/projects
    so their index documents never collide.
 3. Generate and set `CRON_SECRET` (`openssl rand -hex 32`) in Vercel's env
-   vars — this is what authorises `apps/web/vercel.json`'s two cron
-   routes (`/api/cron/outbox-drain` every minute, `/api/cron/reindex`
-   nightly at 03:00 UTC); Vercel attaches
+   vars — this is what authorises `apps/web/vercel.json`'s cron
+   routes (`/api/cron/outbox-drain` daily safety-net on Hobby — restore
+   `* * * * *` on Pro — `/api/cron/reindex` nightly at 03:00 UTC,
+   `/api/cron/retention` at 04:00); Vercel attaches
    `Authorization: Bearer ${CRON_SECRET}` to its own scheduled requests
-   automatically once the var is set, and both routes reject every other
-   request with a 401 while it's unset.
+   automatically once the var is set, and the routes reject every other
+   request with a 401 while it's unset. Also set the same `CRON_SECRET`
+   plus `APP_URL` as GitHub Actions secrets so
+   `.github/workflows/outbox-drain.yml` can keep search lag near the
+   1-minute SLA on Hobby (every 5 minutes).
 4. After the first deploy, trigger `/api/cron/reindex` once by hand
    (`curl -H "Authorization: Bearer $CRON_SECRET" https://<prod-url>/api/cron/reindex`)
    so the index has settings and documents applied before the
-   once-a-minute outbox drain has anything incremental to apply on top.
+   outbox drain has anything incremental to apply on top.
 5. `MAPBOX_ACCESS_TOKEN` is optional — see the [environment variables
    table](#environment-variables) and ADR-0007. Leaving it unset is a
    supported permanent choice (postcodes.io's Places API serves free-text

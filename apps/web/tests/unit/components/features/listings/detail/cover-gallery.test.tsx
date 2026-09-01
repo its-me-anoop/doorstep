@@ -28,8 +28,14 @@ function image(
   }
 }
 
+function thumbnailButtons(): HTMLElement[] {
+  return screen
+    .getAllByRole('button')
+    .filter((button) => button.hasAttribute('aria-pressed'))
+}
+
 // M2-DESIGN-SPEC.md §5.3 — cover + thumbnail strip, clicking a thumbnail
-// swaps the cover in place (no lightbox, no new route — that's M4).
+// swaps the cover in place; M6 adds lightbox and kind tabs.
 describe('CoverGallery', () => {
   it('renders the first image as the cover, using its widest variant', () => {
     render(
@@ -76,7 +82,7 @@ describe('CoverGallery', () => {
       />,
     )
 
-    const thumbnails = screen.getAllByRole('button')
+    const thumbnails = thumbnailButtons()
     expect(thumbnails).toHaveLength(2)
 
     fireEvent.click(thumbnails[1])
@@ -98,8 +104,10 @@ describe('CoverGallery', () => {
         ]}
       />,
     )
-    expect(screen.getByText('Floorplan')).toBeInTheDocument()
-    expect(screen.getByText('EPC certificate')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Floorplan' }))
+    expect(screen.getAllByText('Floorplan').length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('button', { name: 'EPC' }))
+    expect(screen.getAllByText('EPC').length).toBeGreaterThan(0)
   })
 
   it('marks the currently-shown thumbnail as pressed', () => {
@@ -112,7 +120,7 @@ describe('CoverGallery', () => {
         ]}
       />,
     )
-    const thumbnails = screen.getAllByRole('button')
+    const thumbnails = thumbnailButtons()
     expect(thumbnails[0]).toHaveAttribute('aria-pressed', 'true')
     expect(thumbnails[1]).toHaveAttribute('aria-pressed', 'false')
 
@@ -125,6 +133,6 @@ describe('CoverGallery', () => {
   it('renders a flat placeholder, not a crash, when there are no images', () => {
     render(<CoverGallery title="A home" images={[]} />)
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
-    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    expect(screen.queryAllByRole('button', { pressed: true })).toHaveLength(0)
   })
 })

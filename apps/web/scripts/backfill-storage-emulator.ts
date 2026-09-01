@@ -2,7 +2,7 @@
  * scripts/backfill-storage-emulator.ts — closes a pre-existing, already-
  * flagged gap between scripts/seed.ts and the real image pipeline (the
  * gap scripts/seed-search-5k.ts's own header comment names explicitly:
- * "several [of the fixed ~20 seed listings] reference Firebase Storage
+ * "several [of the fixed ~23 seed listings] reference Firebase Storage
  * images that don't resolve against this local dev environment's storage
  * bucket — a full rebuild throws before ever reaching the bench
  * documents").

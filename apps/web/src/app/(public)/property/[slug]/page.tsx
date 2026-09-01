@@ -28,15 +28,17 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
-import { Breadcrumb } from '@/components/features/search/breadcrumb'
 import { CoverGallery } from '@/components/features/listings/detail/cover-gallery'
 import { DescriptionSection } from '@/components/features/listings/detail/description-section'
 import { KeyFacts } from '@/components/features/listings/detail/key-facts'
 import { LocationSection } from '@/components/features/listings/detail/location-section'
 import { ListerCard } from '@/components/features/listings/detail/lister-card'
 import { StatusBanner } from '@/components/features/listings/detail/status-banner'
+import { SaveHeartButton } from '@/components/features/saved/save-heart-button'
+import { Breadcrumb } from '@/components/features/search/breadcrumb'
 import { findAreasMatchingListing } from '@/lib/areas'
 import { createServices } from '@/lib/composition'
+import { getSessionUser } from '@/lib/session'
 import { PublicListingNotFoundError } from '@/services/listings/errors'
 import type { PublicListingDetail } from '@/services/listings/get-public-listing'
 
@@ -138,7 +140,18 @@ export default async function PropertyDetailPage({
     return null
   }
 
+  const session = await getSessionUser()
+  let saved = false
+  if (session) {
+    const { saved: savedServices } = createServices()
+    const favourites = await savedServices.listSavedProperties.execute(
+      session.user,
+    )
+    saved = favourites.some((row) => row.listing.id === listing.id)
+  }
+
   const area = findAreasMatchingListing(listing.town, listing.outcode)[0]
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
 
   return (
     <div className="mx-auto flex max-w-[900px] flex-col gap-8 px-5 py-10 sm:px-8 lg:px-16">
@@ -166,7 +179,16 @@ export default async function PropertyDetailPage({
         channel={listing.channel}
       />
 
-      <CoverGallery title={listing.title} images={listing.images} />
+      <div className="relative">
+        <CoverGallery title={listing.title} images={listing.images} />
+        <div className="absolute top-3 right-3 z-10">
+          <SaveHeartButton
+            propertyId={listing.id}
+            initialSaved={saved}
+            signedIn={Boolean(session)}
+          />
+        </div>
+      </div>
 
       <KeyFacts
         channel={listing.channel}
@@ -188,12 +210,22 @@ export default async function PropertyDetailPage({
         features={listing.features}
       />
 
-      <LocationSection displayAddress={listing.displayAddress} />
+      <LocationSection
+        displayAddress={listing.displayAddress}
+        geo={listing.geo}
+        locationApproximate={listing.locationApproximate}
+      />
 
       <ListerCard
+        propertyId={listing.id}
         channel={listing.channel}
         town={listing.town}
         agency={listing.agency}
+        signedIn={Boolean(session)}
+        defaultName={session?.user.displayName}
+        defaultEmail={session?.user.email}
+        defaultPhone={session?.user.phone}
+        turnstileSiteKey={turnstileSiteKey}
       />
 
       <script

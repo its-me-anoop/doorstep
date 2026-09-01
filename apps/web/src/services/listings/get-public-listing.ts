@@ -60,6 +60,8 @@ export interface PublicListingAgency {
   id: string
   name: string
   logoUrl: string | null
+  /** Revealed on tap (DET-4); omitted for private sellers. */
+  contactPhone: string | null
 }
 
 /**
@@ -162,6 +164,7 @@ export class GetPublicListing {
           logoUrl: agency.logoPath
             ? await this.imageStorage.publicUrl(agency.logoPath)
             : null,
+          contactPhone: agency.phone || null,
         }
       : null
 

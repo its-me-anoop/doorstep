@@ -18,16 +18,20 @@ import {
 } from '@/lib/search-url'
 import { searchQuerySchema } from '@/lib/validation/search'
 import { SearchUnavailableError } from '@/services/search'
-import type {
-  PublicSearchResult,
-  SearchListings,
+import {
+  emptySearchResult,
+  type PublicSearchResult,
+  type SearchListings,
 } from '@/services/search/search-listings'
 
-/** `null` on a search_unavailable outage (§1.10 point 4's SSR
- * equivalent) — the page renders the outage panel from first paint
- * rather than the route itself failing. Any other error propagates: an
- * SSR page throwing on a genuine bug is the correct default (surfaced by
- * Next's error boundary), not silently swallowed into a false "outage".
+/** First paint of `/for-sale` and `/to-rent` must be a real result page
+ * or the genuine empty-listings state — never the outage panel. A
+ * SearchUnavailableError here (empty/unconfigured index after recovery,
+ * or a transient daemon blip on the unrestricted query) becomes an
+ * empty `PublicSearchResult`, not `null`. `null` used to mean "render
+ * OutagePanel from SSR," which is what first load was still hitting.
+ * Filtered/geo client re-queries can still surface the outage panel.
+ * Any other error still propagates to Next's error boundary.
  * `areaFilter` (§4) scopes the fetch to a curated area's town/outcode —
  * omitted for the unrestricted/search tiers, which have none. */
 export async function fetchInitialSearchResult(
@@ -35,7 +39,7 @@ export async function fetchInitialSearchResult(
   state: SearchUrlState,
   channel: Channel,
   areaFilter?: SearchAreaFilter,
-): Promise<PublicSearchResult | null> {
+): Promise<PublicSearchResult> {
   const query = searchQuerySchema.parse(
     buildSearchApiQuery(state, channel, areaFilter),
   )
@@ -43,7 +47,9 @@ export async function fetchInitialSearchResult(
   try {
     return await searchListings.execute(query)
   } catch (error) {
-    if (error instanceof SearchUnavailableError) return null
+    if (error instanceof SearchUnavailableError) {
+      return emptySearchResult(query.page)
+    }
     throw error
   }
 }

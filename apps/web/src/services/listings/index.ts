@@ -24,6 +24,8 @@ export type {
   PublicListingImage,
 } from './get-public-listing'
 export { ListNewestInArea } from './list-newest-in-area'
+export { ListPublishedSlugs } from './list-published-slugs'
+export type { PublishedSlugEntry } from './list-published-slugs'
 export {
   ListingNotEditableError,
   ListingChannelImmutableError,

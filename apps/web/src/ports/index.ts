@@ -71,3 +71,44 @@ export type { GeocodeCache } from './geocode-cache'
 export type { RateLimitResult, RateLimiter } from './rate-limiter'
 export type { Clock } from './clock'
 export type { DecodedIdentity, RoleClaims, AuthGateway } from './auth-gateway'
+export type {
+  Enquiry,
+  EnquiryCursorPage,
+  ListEnquiriesOptions,
+  NewEnquiry,
+  EnquiryReader,
+  EnquiryWriter,
+} from './enquiry-repository'
+export { EnquiryNotFoundError } from './enquiry-repository'
+export type {
+  SavedProperty,
+  SavedPropertyRepository,
+} from './saved-property-repository'
+export type {
+  SavedSearch,
+  NewSavedSearch,
+  SavedSearchRepository,
+} from './saved-search-repository'
+export { SavedSearchNotFoundError } from './saved-search-repository'
+export type {
+  AuditLogEntry,
+  NewAuditLogEntry,
+  AuditLogFilter,
+  AuditLogPage,
+  AuditLogRepository,
+} from './audit-log-repository'
+export type {
+  AnalyticsEvent,
+  NewAnalyticsEvent,
+  EventRepository,
+} from './event-repository'
+export type {
+  Report,
+  ReportStatus,
+  NewReport,
+  ReportCursorPage,
+  ReportRepository,
+} from './report-repository'
+export { ReportNotFoundError } from './report-repository'
+export type { CaptchaVerifier } from './captcha-verifier'
+export type { UserSearchOptions, UserCursorPage } from './user-repository'

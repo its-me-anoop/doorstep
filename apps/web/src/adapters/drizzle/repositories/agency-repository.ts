@@ -7,7 +7,7 @@
  * against a real Postgres instance in tests/integration/.
  */
 
-import { eq } from 'drizzle-orm'
+import { desc, eq, lt } from 'drizzle-orm'
 import postgres from 'postgres'
 
 import {
@@ -141,5 +141,51 @@ export class DrizzleAgencyRepository implements AgencyRepository {
     } catch (error) {
       throw mapAgencyUniqueViolation(error, agency.slug) ?? error
     }
+  }
+
+  async update(
+    id: string,
+    changes: Partial<
+      Pick<
+        Agency,
+        | 'name'
+        | 'logoPath'
+        | 'phone'
+        | 'email'
+        | 'website'
+        | 'address'
+        | 'verified'
+      >
+    >,
+  ): Promise<Agency> {
+    const [row] = await this.db
+      .update(agencies)
+      .set(changes)
+      .where(eq(agencies.id, id))
+      .returning()
+    if (!row) {
+      throw new Error(`DrizzleAgencyRepository.update: no agency with id ${id}`)
+    }
+    return mapRowToAgency(row)
+  }
+
+  async list(options?: {
+    cursor?: string | null
+    limit?: number
+  }): Promise<{ data: Agency[]; nextCursor: string | null }> {
+    const { cursor, limit = 20 } = options ?? {}
+    const where = cursor ? lt(agencies.id, cursor) : undefined
+
+    const rows = await this.db
+      .select()
+      .from(agencies)
+      .where(where)
+      .orderBy(desc(agencies.id))
+      .limit(limit + 1)
+
+    const page = rows.slice(0, limit)
+    const nextCursor = rows.length > limit ? (page.at(-1)?.id ?? null) : null
+
+    return { data: page.map(mapRowToAgency), nextCursor }
   }
 }

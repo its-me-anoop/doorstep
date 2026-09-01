@@ -15,10 +15,15 @@ vi.mock('next/navigation', () => ({
 }))
 
 const getPublicListing = { execute: vi.fn() }
+const listSavedProperties = { execute: vi.fn().mockResolvedValue([]) }
 vi.mock('@/lib/composition', () => ({
   createServices: () => ({
     listings: { getPublicListing },
+    saved: { listSavedProperties },
   }),
+}))
+vi.mock('@/lib/session', () => ({
+  getSessionUser: vi.fn().mockResolvedValue(null),
 }))
 
 function listing(
@@ -104,7 +109,12 @@ describe('/property/[slug] page', () => {
   it('shows the agency name for an agency-listed property, not the private badge', async () => {
     getPublicListing.execute.mockResolvedValue(
       listing({
-        agency: { id: 'agency-1', name: 'Barnes & Co', logoUrl: null },
+        agency: {
+          id: 'agency-1',
+          name: 'Barnes & Co',
+          logoUrl: null,
+          contactPhone: null,
+        },
       }),
     )
     const { default: PropertyDetailPage } =

@@ -11,11 +11,16 @@ vi.mock('next/navigation', () => ({
 
 const searchListingsExecute = vi.fn()
 const listNewestInAreaExecute = vi.fn()
+const listSavedPropertiesExecute = vi.fn().mockResolvedValue([])
 vi.mock('@/lib/composition', () => ({
   createServices: () => ({
     search: { searchListings: { execute: searchListingsExecute } },
     listings: { listNewestInArea: { execute: listNewestInAreaExecute } },
+    saved: { listSavedProperties: { execute: listSavedPropertiesExecute } },
   }),
+}))
+vi.mock('@/lib/session', () => ({
+  getSessionUser: vi.fn().mockResolvedValue(null),
 }))
 
 function serialise(node: unknown): string {

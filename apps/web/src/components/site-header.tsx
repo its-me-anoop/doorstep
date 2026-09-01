@@ -26,32 +26,46 @@ export async function SiteHeader() {
 
   return (
     <header className="border-border bg-background relative border-b">
-      <div className="mx-auto flex h-14 max-w-[1200px] items-center gap-4 px-5 sm:px-8 lg:h-[72px] lg:px-16">
-        <Wordmark />
+      <div className="mx-auto flex min-h-14 max-w-[1200px] flex-wrap items-center gap-x-2 gap-y-2 px-3 sm:gap-x-4 sm:px-8 lg:min-h-[72px] lg:px-16">
+        <Wordmark className="shrink-0" />
         <HeaderSearch />
-        <nav className="ml-auto flex items-center gap-6">
+        <nav className="ml-auto flex shrink-0 items-center gap-2.5 sm:gap-6">
           {session ? (
             <>
               <Link
+                href="/account/favourites"
+                className="text-foreground hover:text-primary text-sm font-medium whitespace-nowrap"
+              >
+                Favourites
+              </Link>
+              <Link
                 href="/account"
-                className="text-foreground hover:text-primary text-sm font-medium"
+                className="text-foreground hover:text-primary text-sm font-medium whitespace-nowrap"
               >
                 Account
               </Link>
+              {session.user.role === 'admin' && (
+                <Link
+                  href="/admin"
+                  className="text-foreground hover:text-primary text-sm font-medium whitespace-nowrap"
+                >
+                  Admin
+                </Link>
+              )}
               <SignOutButton />
             </>
           ) : (
             <>
               <Link
                 href="/sign-in"
-                className="text-foreground hover:text-primary text-sm font-medium"
+                className="text-foreground hover:text-primary inline-flex h-11 min-w-11 items-center justify-center text-sm font-medium whitespace-nowrap"
               >
                 Sign in
               </Link>
               <Button
                 render={<Link href="/sign-up" />}
                 size="sm"
-                className="h-11 rounded-[var(--radius-md)] px-4"
+                className="h-11 shrink-0 rounded-[var(--radius-md)] px-3 sm:px-4"
               >
                 Get early access
               </Button>

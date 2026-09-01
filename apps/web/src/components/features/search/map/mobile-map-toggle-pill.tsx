@@ -5,19 +5,18 @@ interface MobileMapTogglePillProps {
 }
 
 /**
- * §3.1's floating "Map" pill — the list-side half of the mobile
+ * §3.1's "Map" pill — the list-side half of the mobile
  * one-destination-at-a-time toggle (the map-side half, "List (N)", is
- * `map-view.tsx`'s own bottom pill, since it needs the live result
- * count that only exists once the map view's data is in scope). A real
- * `h-11` button, in normal DOM flow (visually `fixed`, but a genuine tab
- * stop).
+ * `map-view.tsx`'s own bottom pill). Lives in the results toolbar in
+ * normal document flow so it cannot float over the heading or empty/
+ * outage copy.
  */
 export function MobileMapTogglePill({ onClick }: MobileMapTogglePillProps) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="bg-primary text-primary-foreground fixed bottom-6 left-1/2 z-30 flex h-11 -translate-x-1/2 items-center gap-1.5 rounded-[var(--radius-full)] px-4 text-sm font-medium lg:hidden"
+      className="bg-primary text-primary-foreground inline-flex h-11 shrink-0 items-center gap-1.5 rounded-[var(--radius-full)] px-4 text-sm font-medium lg:hidden"
     >
       <MapIcon aria-hidden="true" className="size-4" />
       Map

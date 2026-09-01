@@ -7,7 +7,7 @@
  * instead of re-deriving what "should" have happened.
  */
 
-import type { OutboxOp, PropertyStatus } from '@/domain/enums'
+import type { Channel, OutboxOp, PropertyStatus } from '@/domain/enums'
 import {
   ListingNotFoundError,
   type AreaListingCriteria,
@@ -106,6 +106,70 @@ export class FakeListingRepository implements ListingReader, ListingWriter {
       .slice(0, limit)
   }
 
+  async listPendingReview(
+    options: ListListingsOptions = {},
+  ): Promise<ListingCursorPage<Listing>> {
+    return this.paginate(
+      (listing) => listing.status === 'pending_review',
+      options,
+      'oldest',
+    )
+  }
+
+  async countByStatus(status: PropertyStatus): Promise<number> {
+    return [...this.byId.values()].filter(
+      (listing) => listing.status === status,
+    ).length
+  }
+
+  async countLiveByChannel(): Promise<{ sale: number; rent: number }> {
+    let sale = 0
+    let rent = 0
+    for (const listing of this.byId.values()) {
+      if (listing.status !== 'published' && listing.status !== 'under_offer') {
+        continue
+      }
+      if (listing.channel === 'sale') sale++
+      else rent++
+    }
+    return { sale, rent }
+  }
+
+  async listSimilar(input: {
+    excludeId: string
+    channel: Channel
+    town: string
+    bedrooms: number
+    price: number
+    limit: number
+  }): Promise<Listing[]> {
+    const minPrice = input.price * 0.8
+    const maxPrice = input.price * 1.2
+    return [...this.byId.values()]
+      .filter(
+        (listing) =>
+          listing.id !== input.excludeId &&
+          listing.channel === input.channel &&
+          listing.town === input.town &&
+          listing.bedrooms === input.bedrooms &&
+          listing.status === 'published' &&
+          listing.price >= minPrice &&
+          listing.price <= maxPrice,
+      )
+      .slice(0, input.limit)
+  }
+
+  async oldestPendingReviewAt(): Promise<Date | null> {
+    const pending = [...this.byId.values()]
+      .filter((listing) => listing.status === 'pending_review')
+      .sort((a, b) => {
+        const aTime = (a.statusChangedAt ?? a.createdAt).getTime()
+        const bTime = (b.statusChangedAt ?? b.createdAt).getTime()
+        return aTime - bTime
+      })
+    return pending[0]?.statusChangedAt ?? pending[0]?.createdAt ?? null
+  }
+
   async createDraft(draft: NewListingDraft): Promise<Listing> {
     const id = `listing-${this.nextId++}`
     const now = new Date()
@@ -157,6 +221,10 @@ export class FakeListingRepository implements ListingReader, ListingWriter {
       status: to,
       statusChangedAt: options.statusChangedAt,
       publishedAt: options.publishedAt ?? existing.publishedAt,
+      rejectionReason:
+        options.rejectionReason !== undefined
+          ? options.rejectionReason
+          : existing.rejectionReason,
       updatedAt: options.statusChangedAt,
     }
     this.byId.set(id, updated)
@@ -193,15 +261,16 @@ export class FakeListingRepository implements ListingReader, ListingWriter {
   private paginate(
     predicate: (listing: Listing) => boolean,
     { cursor, limit = DEFAULT_LIMIT }: ListListingsOptions,
+    order: 'newest' | 'oldest' = 'newest',
   ): ListingCursorPage<Listing> {
-    // Newest first, mirroring DrizzleListingRepository's `id DESC` — see
-    // that file's doc comment for why a UUID v7 primary key makes this
-    // equivalent to created_at DESC.
-    const matches = this.insertionOrder
+    let matches = this.insertionOrder
       .map((id) => this.byId.get(id))
       .filter((listing): listing is Listing => listing !== undefined)
       .filter(predicate)
-      .reverse()
+
+    if (order === 'newest') {
+      matches = matches.reverse()
+    }
 
     const startIndex = cursor
       ? matches.findIndex((listing) => listing.id === cursor) + 1

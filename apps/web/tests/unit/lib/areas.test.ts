@@ -7,11 +7,12 @@ import {
   findAreasMatchingListing,
 } from '@/lib/areas'
 
-// Thames Valley bounding box — generous enough to cover every curated
-// area (Reading through Wokingham) without being so wide it'd also pass
+// Thames Valley bounding box — generous enough to cover the original
+// Reading-through-Wokingham set without being so wide it'd also pass
 // for, say, Manchester. Registry-integrity net only, not a precision geo
 // check (M2-DESIGN-SPEC.md §1.7: area matching is administrative
-// town/outcode, never geo-radius).
+// town/outcode, never geo-radius). Liverpool is a later, out-of-region
+// addition and is asserted separately below.
 const THAMES_VALLEY_BBOX = {
   minLat: 51.3,
   maxLat: 51.6,
@@ -19,18 +20,20 @@ const THAMES_VALLEY_BBOX = {
   maxLng: -0.7,
 }
 
+const THAMES_VALLEY_SLUGS = new Set([
+  'caversham',
+  'earley',
+  'emmer-green',
+  'reading',
+  'tilehurst',
+  'wokingham',
+  'woodley',
+])
+
 describe('AREAS registry', () => {
-  it('has exactly the seven curated slugs from M2-DESIGN-SPEC.md §1.7', () => {
+  it('has the seven Thames Valley slugs from M2-DESIGN-SPEC.md §1.7 plus liverpool', () => {
     expect(AREAS.map((area) => area.slug).sort()).toEqual(
-      [
-        'caversham',
-        'earley',
-        'emmer-green',
-        'reading',
-        'tilehurst',
-        'wokingham',
-        'woodley',
-      ].sort(),
+      [...THAMES_VALLEY_SLUGS, 'liverpool'].sort(),
     )
   })
 
@@ -44,13 +47,28 @@ describe('AREAS registry', () => {
     expect(new Set(labels).size).toBe(labels.length)
   })
 
-  it('centres every area inside the Thames Valley bounding box', () => {
-    for (const area of AREAS) {
+  it('centres every Thames Valley area inside the Thames Valley bounding box', () => {
+    for (const area of AREAS.filter((area) =>
+      THAMES_VALLEY_SLUGS.has(area.slug),
+    )) {
       expect(area.centre.lat).toBeGreaterThanOrEqual(THAMES_VALLEY_BBOX.minLat)
       expect(area.centre.lat).toBeLessThanOrEqual(THAMES_VALLEY_BBOX.maxLat)
       expect(area.centre.lng).toBeGreaterThanOrEqual(THAMES_VALLEY_BBOX.minLng)
       expect(area.centre.lng).toBeLessThanOrEqual(THAMES_VALLEY_BBOX.maxLng)
     }
+  })
+
+  it('registers Liverpool by town at the city-centre point', () => {
+    const liverpool = findAreaBySlug('liverpool')
+    expect(liverpool).toMatchObject({
+      slug: 'liverpool',
+      label: 'Liverpool',
+      match: { town: 'Liverpool' },
+      centre: { lat: 53.4084, lng: -2.9916 },
+    })
+    expect(liverpool?.radiusMiles).toBeGreaterThan(0)
+    expect(liverpool?.intro).toMatch(/city centre/)
+    expect(liverpool?.intro).toMatch(/Allerton/)
   })
 
   it('gives every area a positive radius', () => {
@@ -71,6 +89,7 @@ describe('AREAS registry', () => {
 describe('findAreaBySlug', () => {
   it('finds an area by its slug', () => {
     expect(findAreaBySlug('reading')?.label).toBe('Reading')
+    expect(findAreaBySlug('liverpool')?.label).toBe('Liverpool')
   })
 
   it('returns undefined for an unknown slug', () => {
@@ -129,6 +148,15 @@ describe('findAreasMatchingListing', () => {
     expect(
       findAreasMatchingListing('Tilehurst', 'RG31').map((a) => a.slug),
     ).toEqual(['tilehurst'])
+  })
+
+  it('matches Liverpool by town, regardless of outcode', () => {
+    expect(
+      findAreasMatchingListing('Liverpool', 'L1').map((area) => area.slug),
+    ).toEqual(['liverpool'])
+    expect(
+      findAreasMatchingListing('Liverpool', 'L17').map((area) => area.slug),
+    ).toEqual(['liverpool'])
   })
 
   it('returns no match for a town/outcode outside the curated set', () => {

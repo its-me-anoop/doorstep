@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildFilterExpression,
   buildSortExpression,
+  isRecoverableSearchIndexError,
   mapFacetDistribution,
   resolveMeilisearchIndexName,
 } from '@/adapters/meilisearch'
@@ -159,6 +160,32 @@ describe('buildSortExpression', () => {
 
   it('maps "price_desc" to price:desc', () => {
     expect(buildSortExpression('price_desc')).toEqual(['price:desc'])
+  })
+})
+
+describe('isRecoverableSearchIndexError', () => {
+  it('treats index_not_found as recoverable (index up, never created)', () => {
+    expect(
+      isRecoverableSearchIndexError(
+        Object.assign(new Error('Index `doorstep-listings` not found'), {
+          code: 'index_not_found',
+        }),
+      ),
+    ).toBe(true)
+  })
+
+  it('treats invalid filter/sort (settings never applied) as recoverable', () => {
+    expect(
+      isRecoverableSearchIndexError(
+        Object.assign(new Error('Attribute `channel` is not filterable'), {
+          code: 'invalid_search_filter',
+        }),
+      ),
+    ).toBe(true)
+  })
+
+  it('does not treat a connection failure as recoverable', () => {
+    expect(isRecoverableSearchIndexError(new Error('ECONNREFUSED'))).toBe(false)
   })
 })
 

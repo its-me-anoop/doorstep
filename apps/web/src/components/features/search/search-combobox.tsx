@@ -7,8 +7,11 @@ import { useEffect, useId, useRef, useState } from 'react'
 import type { Channel } from '@/domain/enums'
 import { hrefForGeocodeSuggestion } from '@/lib/geocode-navigation'
 import { geocodeSearch } from '@/lib/listings-client'
+import {
+  mergeTypeaheadSuggestions,
+  type TypeaheadSuggestion,
+} from '@/lib/typeahead-suggestions'
 import { cn } from '@/lib/utils'
-import type { GeocodeSuggestion } from '@/services/geocoding/search-geocode'
 
 interface SearchComboboxProps {
   channel: Channel
@@ -24,12 +27,13 @@ const MIN_QUERY_LENGTH = 2
  * fast-path match ("RG4") has none — that's the one signal available
  * from the suggestion's own `label` to distinguish them (§1.9's
  * "Postcode" vs "Postcode area" trailing type label). */
-function suggestionTypeLabel(suggestion: GeocodeSuggestion): string {
+function suggestionTypeLabel(suggestion: TypeaheadSuggestion): string {
+  if (suggestion.kind === 'area') return 'Area'
   if (suggestion.kind === 'place') return 'Place'
   return suggestion.label.includes(' ') ? 'Postcode' : 'Postcode area'
 }
 
-function suggestionPrimaryText(suggestion: GeocodeSuggestion): string {
+function suggestionPrimaryText(suggestion: TypeaheadSuggestion): string {
   return suggestion.label
 }
 
@@ -59,7 +63,7 @@ export function SearchCombobox({
   )
 
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<GeocodeSuggestion[]>([])
+  const [results, setResults] = useState<TypeaheadSuggestion[]>([])
   const [panelState, setPanelState] = useState<'closed' | 'results' | 'empty'>(
     'closed',
   )
@@ -84,15 +88,17 @@ export function SearchCombobox({
       const searchTerm = query
       geocodeSearch(searchTerm)
         .then((suggestions) => {
-          setResults(suggestions)
+          const merged = mergeTypeaheadSuggestions(searchTerm, suggestions)
+          setResults(merged)
           setSearchedQuery(searchTerm)
-          setPanelState(suggestions.length > 0 ? 'results' : 'empty')
+          setPanelState(merged.length > 0 ? 'results' : 'empty')
           setHighlightedIndex(-1)
         })
         .catch(() => {
-          setResults([])
+          const merged = mergeTypeaheadSuggestions(searchTerm, [])
+          setResults(merged)
           setSearchedQuery(searchTerm)
-          setPanelState('empty')
+          setPanelState(merged.length > 0 ? 'results' : 'empty')
           setHighlightedIndex(-1)
         })
     }, DEBOUNCE_MS)
@@ -102,7 +108,7 @@ export function SearchCombobox({
     }
   }, [query])
 
-  function selectSuggestion(suggestion: GeocodeSuggestion) {
+  function selectSuggestion(suggestion: TypeaheadSuggestion) {
     setPanelState('closed')
     router.push(hrefForGeocodeSuggestion(suggestion, channel))
   }

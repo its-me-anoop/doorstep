@@ -66,7 +66,7 @@ describe('AccountPage lister entry point', () => {
       const result = await AccountPage()
 
       const serialised = serialise(result)
-      expect(serialised).toContain('Go to your listings')
+      expect(serialised).toContain('Your listings')
       expect(serialised).toContain('/lister')
       expect(serialised).not.toContain('Start listing a property')
     },

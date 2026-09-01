@@ -39,7 +39,7 @@ export function MapEmptyMessage({
         Try zooming out or moving the map — or{' '}
         <Link
           href={unfilteredHref}
-          className="text-primary underline-offset-2 hover:underline"
+          className="text-primary underline underline-offset-2"
         >
           see all homes {CHANNEL_COPY[channel]} {areaLabel}
         </Link>{' '}
@@ -108,7 +108,7 @@ export function MapOverlay({ variant }: MapOverlayProps) {
           <p className="text-muted-foreground text-base leading-relaxed">
             <Link
               href={variant.listHref}
-              className="text-primary underline-offset-2 hover:underline"
+              className="text-primary underline underline-offset-2"
             >
               View as a list
             </Link>{' '}

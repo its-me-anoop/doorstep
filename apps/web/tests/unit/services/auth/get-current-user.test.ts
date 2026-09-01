@@ -20,6 +20,7 @@ const ACTIVE_USER: User = {
   firebaseUid: 'firebase-uid-1',
   email: 'jamie@example.co.uk',
   displayName: 'Jamie',
+  phone: null,
   role: 'user',
   agencyId: null,
   status: 'active',
