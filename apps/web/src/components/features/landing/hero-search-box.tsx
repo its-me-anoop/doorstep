@@ -5,6 +5,7 @@ import { type FormEvent, useState } from 'react'
 
 import type { Channel } from '@/domain/enums'
 import { ChannelSegmentedControl } from '@/components/features/search/channel-segmented-control'
+import { PlainEnglishSearch } from '@/components/features/search/plain-english/plain-english-search'
 import { SearchCombobox } from '@/components/features/search/search-combobox'
 import { Button } from '@/components/ui/button'
 
@@ -37,23 +38,30 @@ export function HeroSearchBox() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="w-full">
-      <div className="sm:border-input flex flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-0 sm:overflow-hidden sm:rounded-[var(--radius-md)] sm:border">
-        <ChannelSegmentedControl
-          value={channel}
-          onChange={setChannel}
-          size="lg"
-          bordered={false}
-          className="sm:rounded-none"
-        />
-        <SearchCombobox channel={channel} size="lg" />
-        <Button
-          type="submit"
-          className="h-12 rounded-[var(--radius-md)] px-6 sm:rounded-none md:h-14"
-        >
-          Search
-        </Button>
-      </div>
-    </form>
+    <div className="flex w-full flex-col gap-2">
+      <form onSubmit={handleSubmit} className="w-full">
+        <div className="sm:border-input flex flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-0 sm:overflow-hidden sm:rounded-[var(--radius-md)] sm:border">
+          <ChannelSegmentedControl
+            value={channel}
+            onChange={setChannel}
+            size="lg"
+            bordered={false}
+            className="sm:rounded-none"
+          />
+          <SearchCombobox channel={channel} size="lg" />
+          <Button
+            type="submit"
+            className="h-12 rounded-[var(--radius-md)] px-6 sm:rounded-none md:h-14"
+          >
+            Search
+          </Button>
+        </div>
+      </form>
+      {/* The second way in: a sentence instead of a postcode. Its own
+          <form>, so it sits beside the combobox's rather than inside it,
+          and follows the hero's channel toggle unless the sentence itself
+          says "to rent"/"for sale". */}
+      <PlainEnglishSearch channel={channel} />
+    </div>
   )
 }

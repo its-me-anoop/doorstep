@@ -21,6 +21,7 @@ import { MobileMapTogglePill } from '@/components/features/search/map/mobile-map
 import { useIsDesktop } from '@/components/features/search/map/use-is-desktop'
 import { OutagePanel } from '@/components/features/search/outage-panel'
 import { Pagination } from '@/components/features/search/pagination'
+import { PlainEnglishSearch } from '@/components/features/search/plain-english/plain-english-search'
 import { ResultCard } from '@/components/features/search/result-card'
 import { SaveSearchButton } from '@/components/features/saved/save-search-button'
 import { SortSelect } from '@/components/features/search/sort-select'
@@ -416,6 +417,16 @@ export function ResultsView({
           state={state}
           channel={channel}
           onChange={handleFilterChange}
+        />
+
+        {/* "Refine in plain English": a sentence layered onto *this*
+            page's state (same channel-switch and location rules as the
+            toggle/combobox), navigating to the same canonical URL the
+            filter bar above would build. */}
+        <PlainEnglishSearch
+          channel={channel}
+          current={{ channel, basePath, state }}
+          className="mt-3"
         />
 
         <div className="mt-6 flex items-center justify-between gap-4">
