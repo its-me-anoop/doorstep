@@ -40,6 +40,11 @@ export const EMBEDDING_MODEL_ID = 'Xenova/all-MiniLM-L6-v2'
 interface TransformersModule {
   env: {
     allowLocalModels: boolean
+    backends?: {
+      onnx?: {
+        wasm?: { numThreads?: number }
+      }
+    }
   }
   pipeline: (
     task: 'feature-extraction',
@@ -102,6 +107,16 @@ async function createEmbedder(): Promise<Embedder> {
     /* webpackIgnore: true */ url
   )) as TransformersModule
   transformers.env.allowLocalModels = false
+  // Multi-threaded WASM needs SharedArrayBuffer, which needs the page to
+  // be cross-origin isolated (COOP/COEP headers) — it isn't, so
+  // onnxruntime would only ever fall back to one thread anyway. Saying
+  // so up front makes the configuration honest rather than incidental;
+  // one thread is plenty for a 22M-parameter model on a handful of
+  // short phrases. (Chrome still logs an "Issues"-tab notice because
+  // onnxruntime's own loader script *references* SharedArrayBuffer; that
+  // is theirs, not a failure.)
+  const wasm = transformers.env.backends?.onnx?.wasm
+  if (wasm) wasm.numThreads = 1
   const extractor = await transformers.pipeline(
     'feature-extraction',
     EMBEDDING_MODEL_ID,
