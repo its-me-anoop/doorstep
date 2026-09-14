@@ -22,3 +22,16 @@
 export function isMapFeatureEnabled(): boolean {
   return process.env.NEXT_PUBLIC_FEATURE_MAP !== 'false'
 }
+
+/**
+ * The on-device ML layer of plain-English search
+ * (lib/nl-search/on-device-embedder.ts): a ~23 MB sentence-embedding
+ * model fetched lazily from a public CDN and run in the visitor's own
+ * browser via WebAssembly. Same kill-switch shape as the map flag —
+ * flipping it off leaves the rule-based parser (the feature's core)
+ * fully working and only removes the "Suggested" chips. Default:
+ * **enabled**.
+ */
+export function isNlSearchAiEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_FEATURE_NL_SEARCH_AI !== 'false'
+}
