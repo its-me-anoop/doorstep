@@ -18,30 +18,52 @@ const DEFAULT_RADIUS_MILES: Record<GeocodeSuggestion['kind'], number> = {
   place: 5,
 }
 
-function channelPrefix(channel: Channel): string {
+export function channelPrefix(channel: Channel): string {
   return channel === 'sale' ? '/for-sale' : '/to-rent'
 }
 
-export function hrefForGeocodeSuggestion(
+/** Where a suggestion lands, split into the route (`basePath`) and the
+ * location part of the URL state — so a caller that wants to *add*
+ * filters to the location (lib/nl-search/navigation.ts) can merge into
+ * `state` before serialising, instead of re-parsing an href. */
+export interface GeocodeSearchTarget {
+  basePath: string
+  state: SearchUrlState
+}
+
+export function searchTargetForGeocodeSuggestion(
   suggestion: TypeaheadSuggestion,
   channel: Channel,
-): string {
+): GeocodeSearchTarget {
   if (suggestion.kind === 'area') {
-    return `${channelPrefix(channel)}/${suggestion.slug}`
+    return {
+      basePath: `${channelPrefix(channel)}/${suggestion.slug}`,
+      state: {},
+    }
   }
 
   const matchText =
     suggestion.kind === 'place' ? suggestion.name : suggestion.label
   const area = matchCuratedArea(matchText)
   if (area) {
-    return `${channelPrefix(channel)}/${area.slug}`
+    return { basePath: `${channelPrefix(channel)}/${area.slug}`, state: {} }
   }
 
-  const state: SearchUrlState = {
-    lat: suggestion.lat,
-    lng: suggestion.lng,
-    radius: DEFAULT_RADIUS_MILES[suggestion.kind],
-    label: suggestion.label,
+  return {
+    basePath: `${channelPrefix(channel)}/search`,
+    state: {
+      lat: suggestion.lat,
+      lng: suggestion.lng,
+      radius: DEFAULT_RADIUS_MILES[suggestion.kind],
+      label: suggestion.label,
+    },
   }
-  return buildSearchHref(`${channelPrefix(channel)}/search`, state)
+}
+
+export function hrefForGeocodeSuggestion(
+  suggestion: TypeaheadSuggestion,
+  channel: Channel,
+): string {
+  const target = searchTargetForGeocodeSuggestion(suggestion, channel)
+  return buildSearchHref(target.basePath, target.state)
 }
